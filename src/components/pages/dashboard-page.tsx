@@ -126,7 +126,7 @@ export function DashboardPage() {
             awayScore: match.away_score ?? 0,
             date: match.scheduled_at ? new Date(match.scheduled_at).toLocaleString() : "Not scheduled",
             status: normalizeMatchStatus(match.status),
-            venue: match.venue || "Club Arena",
+            venue: match.venue || "Shield Arena",
             tournament: tournamentMap[match.tournament_id] ?? "Tournament",
             slots: [profileMap[match.home_player_id] ?? "Slot 1", profileMap[match.away_player_id] ?? "Slot 2"]
           }))

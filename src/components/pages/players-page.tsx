@@ -79,10 +79,10 @@ export function PlayersPage() {
     setPlayers(
       profileRows.map((profile) => ({
         id: profile.id,
-        name: profile.full_name || profile.gamer_tag || "Club Member",
+        name: profile.full_name || profile.gamer_tag || "Shield Member",
         handle: profile.gamer_tag || profile.full_name || "member",
         role: profile.role ?? "Player",
-        club: profile.club_name || "Neon Strikers FC",
+        club: profile.club_name || "Shield Esports",
         avatarUrl: profile.avatar_url,
         matches: statsMap[profile.id]?.matches ?? 0,
         goals: statsMap[profile.id]?.goals ?? 0,

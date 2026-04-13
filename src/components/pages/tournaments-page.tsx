@@ -66,7 +66,7 @@ export function TournamentsPage() {
         (profileRows ?? []).map((item) => [
           item.id,
           {
-            name: item.gamer_tag || item.full_name || "Club Member",
+            name: item.gamer_tag || item.full_name || "Shield Member",
             role: (item.role as Role | null) ?? "Player"
           }
         ])
@@ -112,7 +112,7 @@ export function TournamentsPage() {
       .from("tournaments")
       .insert({
         name: form.name,
-        external_competition: "Internal Club Tournament",
+        external_competition: "Shield Esports Tournament",
         format: form.format,
         player_count: form.participantIds.length,
         slot_count: form.slotCount,

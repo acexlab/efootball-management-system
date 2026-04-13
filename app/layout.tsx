@@ -7,8 +7,11 @@ import { AppShell } from "@/components/layout/app-shell";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "EFCMS Dashboard",
-  description: "Cyberpunk esports football club management dashboard."
+  title: "Shield Esports Control Center",
+  description: "Shield Esports football club management dashboard.",
+  icons: {
+    icon: "/brand/shield-logo.jpg"
+  }
 };
 
 export const viewport: Viewport = {

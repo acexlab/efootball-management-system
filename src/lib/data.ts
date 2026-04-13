@@ -2,11 +2,11 @@ import type { UserProfile, WorkflowStep } from "@/lib/types";
 
 export const currentUser: UserProfile = {
   id: "local-user",
-  name: "Club User",
+  name: "Shield Member",
   handle: "member",
   email: "",
   role: "Player",
-  club: "Neon Strikers FC",
+  club: "Shield Esports",
   image: "",
   notifications: 0
 };

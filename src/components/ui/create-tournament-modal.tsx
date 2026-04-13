@@ -162,7 +162,7 @@ export function CreateTournamentModal({
             label="Tournament name"
             value={form.name}
             onChange={(value) => setForm((state) => ({ ...state, name: value }))}
-            placeholder="Club Series A"
+            placeholder="Shield Series A"
           />
           <Field
             label="Format"

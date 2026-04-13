@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Bell, Search, Sparkles } from "lucide-react";
 import { useAuthProfile } from "@/hooks/use-auth-profile";
@@ -22,6 +23,9 @@ export function Topbar() {
           Elite control center
         </p>
         <div className="mt-1 flex flex-col gap-2 sm:mt-2 sm:flex-row sm:items-center sm:gap-3">
+          <div className="relative h-9 w-9 overflow-hidden rounded-xl border border-white/10 bg-white/5 sm:h-10 sm:w-10">
+            <Image src="/brand/shield-logo.jpg" alt="Shield Esports logo" fill className="object-cover" />
+          </div>
           <h1
             className="text-xl sm:text-2xl md:text-3xl font-black uppercase tracking-[0.14em] text-white leading-tight"
             style={{ fontFamily: "\"Orbitron\", sans-serif" }}

@@ -94,7 +94,7 @@ export function TournamentTable({
                   <td className="rounded-l-2xl px-4 py-4">
                     <p className="font-semibold text-white">{item.name}</p>
                     <p className="text-sm text-[color:var(--text-muted)]">
-                      {item.format} • {item.externalCompetition ?? "Club Competition"}
+                      {item.format} • {item.externalCompetition ?? "Shield Competition"}
                     </p>
                   </td>
                   <td className="px-4 py-4 text-sm text-white">{item.startDate}</td>

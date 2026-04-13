@@ -44,9 +44,9 @@ export async function syncClubLeaderboardFromStats(supabase: SupabaseClient) {
   for (const profile of (profiles ?? []) as ProfileAggregateRow[]) {
     byPlayer.set(profile.id, {
       player_id: profile.id,
-      player_name: profile.full_name || profile.gamer_tag || "Club Member",
+      player_name: profile.full_name || profile.gamer_tag || "Shield Member",
       player_handle: profile.gamer_tag || profile.full_name || `player-${profile.id.slice(0, 8)}`,
-      club_name: profile.club_name || "Neon Strikers FC",
+      club_name: profile.club_name || "Shield Esports",
       image_url: profile.avatar_url || "",
       matches: 0,
       wins: 0,

@@ -175,7 +175,7 @@ export function UsersPage() {
                     <td className="px-4 py-4">
                       <StatusPill label={user.role ?? "Player"} tone={roleTone(user.role ?? "Player")} />
                     </td>
-                    <td className="px-4 py-4 text-sm text-white">{user.club_name ?? "Neon Strikers FC"}</td>
+                    <td className="px-4 py-4 text-sm text-white">{user.club_name ?? "Shield Esports"}</td>
                     <td className="px-4 py-4 text-sm text-white">
                       {new Date(user.created_at).toLocaleDateString()}
                     </td>

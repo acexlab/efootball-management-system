@@ -23,9 +23,12 @@ export function UserAvatar({
       {src ? (
         <Image src={src} alt={`${name} avatar`} fill className="object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-white">
-          {initials || "U"}
-        </div>
+        <>
+          <Image src="/brand/shield-logo.jpg" alt="Shield Esports logo" fill className="object-cover opacity-40" />
+          <div className="relative flex h-full w-full items-center justify-center text-xs sm:text-sm font-semibold uppercase tracking-[0.18em] text-white">
+            {initials || "U"}
+          </div>
+        </>
       )}
     </div>
   );

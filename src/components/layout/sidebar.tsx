@@ -1,12 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   BarChart3,
   ClipboardList,
-  Crown,
   LayoutDashboard,
   LineChart,
   Menu,
@@ -103,17 +103,17 @@ export function Sidebar() {
   return (
     <aside className="panel hidden w-[260px] shrink-0 rounded-2xl px-4 py-5 lg:flex lg:flex-col">
       <div className="flex items-center gap-3 border-b border-white/8 pb-4">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#00FF88]/20 via-[#00D4FF]/14 to-[#7A5CFF]/16">
-          <Crown className="h-5 w-5 text-[#00FF88]" />
+        <div className="relative h-11 w-11 overflow-hidden rounded-xl border border-white/10 bg-white/5">
+          <Image src="/brand/shield-logo.jpg" alt="Shield Esports logo" fill className="object-cover" />
         </div>
         <div>
           <p
             className="text-base font-black uppercase tracking-[0.25em] text-white"
             style={{ fontFamily: "\"Orbitron\", sans-serif" }}
           >
-            EFCMS
+            Shield
           </p>
-          <p className="text-xs text-[color:var(--text-muted)]">Elite football ops</p>
+          <p className="text-xs text-[color:var(--text-muted)]">Shield Esports Ops</p>
         </div>
       </div>
 

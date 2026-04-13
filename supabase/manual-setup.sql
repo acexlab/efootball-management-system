@@ -5,7 +5,7 @@ create table if not exists public.club_leaderboard (
   player_id uuid not null unique,
   player_name text not null,
   player_handle text not null unique,
-  club_name text not null default 'Neon Strikers FC',
+  club_name text not null default 'Shield Esports',
   image_url text,
   matches integer not null default 0 check (matches >= 0),
   wins integer not null default 0 check (wins >= 0),

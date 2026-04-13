@@ -28,7 +28,7 @@ create table if not exists public.profiles (
   email text unique not null,
   full_name text,
   gamer_tag text,
-  club_name text not null default 'Neon Strikers FC',
+  club_name text not null default 'Shield Esports',
   avatar_url text,
   role public.app_role not null default 'Player',
   created_at timestamptz not null default now()
@@ -229,7 +229,7 @@ begin
   )
   values (
     tournament_name,
-    'Internal Club Tournament',
+    'Shield Esports Tournament',
     coalesce(nullif(trim(tournament_format), ''), 'Slot Based'),
     array_length(unique_participants, 1),
     tournament_slot_count,
@@ -272,7 +272,7 @@ $$;
 create table if not exists public.tournaments (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  external_competition text not null default 'Internal Club Tournament',
+  external_competition text not null default 'Shield Esports Tournament',
   format text not null default 'Slot Based',
   player_count integer not null check (player_count > 0),
   slot_count integer not null default 5 check (slot_count > 0),
@@ -369,7 +369,7 @@ create table if not exists public.club_leaderboard (
   player_id uuid not null unique,
   player_name text not null,
   player_handle text not null unique,
-  club_name text not null default 'Neon Strikers FC',
+  club_name text not null default 'Shield Esports',
   image_url text,
   matches integer not null default 0 check (matches >= 0),
   wins integer not null default 0 check (wins >= 0),

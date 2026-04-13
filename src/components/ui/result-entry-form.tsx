@@ -28,7 +28,7 @@ export function ResultEntryForm({ role }: { role: Role }) {
   const [players, setPlayers] = useState<PlayerOption[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState("");
   const [matchNumber, setMatchNumber] = useState("1");
-  const [venue, setVenue] = useState("Club Arena");
+  const [venue, setVenue] = useState("Shield Arena");
   const [scheduledAt, setScheduledAt] = useState("");
   const [walkover, setWalkover] = useState(false);
   const [remarks, setRemarks] = useState("");
@@ -102,7 +102,7 @@ export function ResultEntryForm({ role }: { role: Role }) {
 
       const options: PlayerOption[] = (profileRows ?? []).map((item) => ({
         id: item.id,
-        name: item.gamer_tag || item.full_name || "Club Member",
+        name: item.gamer_tag || item.full_name || "Shield Member",
         role: (item.role as Role | null) ?? "Player",
         avatarUrl: item.avatar_url ?? undefined
       }));
@@ -381,7 +381,7 @@ export function ResultEntryForm({ role }: { role: Role }) {
           onChange={setScheduledAt}
           placeholder=""
         />
-        <Field label="Venue" type="text" value={venue} onChange={setVenue} placeholder="Club Arena" />
+        <Field label="Venue" type="text" value={venue} onChange={setVenue} placeholder="Shield Arena" />
       </div>
       {step === 1 ? (
         <div className="flex justify-end">

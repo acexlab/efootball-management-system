@@ -1,0 +1,221 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0b0f14;
+  --panel: rgba(18, 24, 33, 0.78);
+  --panel-strong: #121821;
+  --panel-muted: rgba(255, 255, 255, 0.04);
+  --line: rgba(255, 255, 255, 0.08);
+  --text: #f7fbff;
+  --text-muted: #9aa8bc;
+  --success: #00ff88;
+  --cyan: #00d4ff;
+  --violet: #7a5cff;
+  --warning: #ffd166;
+  --danger: #ff5470;
+}
+
+@layer base {
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes slideInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes slideInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      opacity: 0.8;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+  color: var(--text);
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(0, 212, 255, 0.08), transparent 26%),
+    radial-gradient(circle at top right, rgba(122, 92, 255, 0.08), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(0, 255, 136, 0.06), transparent 24%),
+    linear-gradient(180deg, #091018 0%, #0b0f14 34%, #0d1219 100%);
+  color: var(--text);
+  font-family: "Inter", ui-sans-serif, sans-serif;
+  animation: fadeIn 0.5s ease-out;
+  overflow-x: hidden;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 160px 160px;
+  content: "";
+  pointer-events: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(0, 255, 136, 0.22);
+  color: white;
+}
+
+.panel {
+  backdrop-filter: blur(8px);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015)),
+    var(--panel);
+  border: 1px solid var(--line);
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: border-color 0.25s ease, background-color 0.25s ease, box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .panel:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.panel-glow {
+  position: relative;
+}
+
+.panel-glow::after {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgba(0, 255, 136, 0.14),
+    rgba(0, 212, 255, 0.07),
+    rgba(122, 92, 255, 0.09)
+  );
+  filter: blur(10px);
+  opacity: 0.1;
+  content: "";
+  z-index: -1;
+  transition: opacity 0.3s ease-out;
+}
+
+.panel-glow:hover::after {
+  opacity: 0.16;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, #f8fdff 0%, #c7fef1 30%, #8fd7ff 70%, #e5dfff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Touch-friendly button sizes for mobile */
+@media (max-width: 768px) {
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Smooth transitions */
+* {
+  @apply transition-colors duration-200;
+}
+
+button,
+a,
+input {
+  @apply duration-200;
+}
+
+/* Mobile optimizations */
+@media (max-width: 640px) {
+  body {
+    font-size: 14px;
+  }
+
+  .panel {
+    backdrop-filter: blur(6px);
+  }
+
+  h1, h2, h3 {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    word-break: break-word;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -29,6 +29,9 @@ type PlayerRow = {
   matches: number;
   goals: number;
   points: number;
+  wins: number;
+  draws: number;
+  winPct: number;
   trend: number[];
 };
 
@@ -72,6 +75,8 @@ export function PlayersPage() {
         row.player_id as string,
         {
           matches: row.matches as number,
+          wins: row.wins as number,
+          draws: row.draws as number,
           goals: row.goals_scored as number,
           points: (row.points as number | null) ?? (((row.wins as number) * 3) + (row.draws as number))
         }
@@ -122,8 +127,11 @@ export function PlayersPage() {
         club: profile.club_name || "Shield Esports",
         avatarUrl: profile.avatar_url,
         matches: statsMap[profile.id]?.matches ?? 0,
+        wins: statsMap[profile.id]?.wins ?? 0,
+        draws: statsMap[profile.id]?.draws ?? 0,
         goals: statsMap[profile.id]?.goals ?? 0,
         points: statsMap[profile.id]?.points ?? 0,
+        winPct: calculateWinPct(statsMap[profile.id]?.wins ?? 0, statsMap[profile.id]?.matches ?? 0),
         trend: buildTrendSeriesFromStats(perPlayerStats[profile.id] ?? [], matchMap)
       }))
     );
@@ -194,10 +202,10 @@ export function PlayersPage() {
                   </div>
                 </div>
 
-                <div className="mt-5 grid grid-cols-3 gap-3">
+                <div className="mt-5 grid gap-3 sm:grid-cols-2">
                   <StatCard label="Goals" value={player.goals} />
-                  <StatCard label="Matches" value={player.matches} />
-                  <StatCard label="Points" value={player.points} />
+                  <StatCard label="Win %" value={player.winPct} suffix="%" />
+                  <OutcomeCard wins={player.wins} draws={player.draws} losses={Math.max(player.matches - player.wins - player.draws, 0)} />
                 </div>
                 <p className="mt-4 text-xs uppercase tracking-[0.24em] text-[#00D4FF]/80">
                   View performance
@@ -257,8 +265,12 @@ export function PlayersPage() {
               </div>
               <div className="grid gap-3">
                 <StatCard label="Goals" value={selectedPlayer.goals} />
-                <StatCard label="Matches" value={selectedPlayer.matches} />
-                <StatCard label="Points" value={selectedPlayer.points} />
+                <StatCard label="Win %" value={selectedPlayer.winPct} suffix="%" />
+                <OutcomeCard
+                  wins={selectedPlayer.wins}
+                  draws={selectedPlayer.draws}
+                  losses={Math.max(selectedPlayer.matches - selectedPlayer.wins - selectedPlayer.draws, 0)}
+                />
               </div>
             </div>
           </div>
@@ -275,11 +287,38 @@ function roleTone(role: Role) {
   return "neutral";
 }
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function StatCard({ label, value, suffix }: { label: string; value: number; suffix?: string }) {
   return (
     <div className="rounded-[20px] border border-white/8 bg-black/20 px-3 py-4 text-center">
       <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">{label}</p>
-      <p className="mt-3 text-2xl font-black text-white">{value}</p>
+      <p className="mt-3 text-2xl font-black text-white">
+        {value}
+        {suffix ? <span className="text-sm font-semibold text-[color:var(--text-muted)]">{suffix}</span> : null}
+      </p>
+    </div>
+  );
+}
+
+function calculateWinPct(wins: number, matches: number) {
+  if (!matches) return 0;
+  return Math.round((wins / matches) * 100);
+}
+
+function OutcomeCard({ wins, draws, losses }: { wins: number; draws: number; losses: number }) {
+  return (
+    <div className="rounded-[20px] border border-white/8 bg-black/20 px-3 py-4 text-center sm:col-span-2">
+      <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">W • D • L</p>
+      <div className="mt-3 flex items-center justify-center gap-3 text-lg font-semibold text-white">
+        <span className="rounded-full border border-[#00FF88]/30 bg-[#00FF88]/10 px-3 py-1 text-xs font-semibold text-[#00FF88]">
+          {wins} W
+        </span>
+        <span className="rounded-full border border-[#00D4FF]/30 bg-[#00D4FF]/10 px-3 py-1 text-xs font-semibold text-[#00D4FF]">
+          {draws} D
+        </span>
+        <span className="rounded-full border border-[#FF5470]/30 bg-[#FF5470]/10 px-3 py-1 text-xs font-semibold text-[#FF5470]">
+          {losses} L
+        </span>
+      </div>
     </div>
   );
 }

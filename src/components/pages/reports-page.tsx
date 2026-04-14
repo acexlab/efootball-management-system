@@ -52,18 +52,18 @@ export function ReportsPage() {
 
   return (
     <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-      <Panel className="p-6">
+      <Panel className="p-4 sm:p-6">
         <SectionHeading
           eyebrow="Analyst room"
           title="Reports"
           description="System reporting now reflects real table counts and setup progress instead of fabricated analyst cards."
         />
         {message ? (
-          <div className="mt-6 rounded-[24px] border border-[#7A5CFF]/25 bg-[#7A5CFF]/10 px-4 py-3 text-sm text-[#E3DAFF]">
+          <div className="mt-4 rounded-[24px] border border-[#7A5CFF]/25 bg-[#7A5CFF]/10 px-4 py-3 text-sm text-[#E3DAFF] sm:mt-6">
             {message}
           </div>
         ) : null}
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="mt-4 grid gap-3 sm:mt-6 sm:gap-4 md:grid-cols-2">
           {metrics.map((metric, index) => (
             <MetricCard
               key={metric.label}
@@ -75,7 +75,7 @@ export function ReportsPage() {
         </div>
       </Panel>
 
-      <Panel className="p-6">
+      <Panel className="p-4 sm:p-6">
         <SectionHeading
           eyebrow="Trend"
           title="Performance Graph"
@@ -90,22 +90,30 @@ export function ReportsPage() {
             />
           </div>
         ) : (
-          <div className="mt-8 flex h-[320px] items-end gap-4 rounded-[28px] border border-white/8 bg-black/20 p-6">
-            {metrics.map((metric) => {
-              const height = Math.max(metric.value * 18, 18);
-              return (
-                <div key={metric.label} className="flex flex-1 flex-col items-center gap-3">
-                  <div
-                    className="w-full rounded-t-[18px] bg-gradient-to-t from-[#00FF88] via-[#00D4FF] to-[#7A5CFF]"
-                    style={{ height: `${Math.min(height, 100)}%` }}
-                  />
-                  <span className="text-center text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
-                    {metric.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+          <>
+            <div className="mt-6 grid gap-3 sm:hidden">
+              {metrics.map((metric) => (
+                <MobileTrendRow key={metric.label} label={metric.label} value={metric.value} />
+              ))}
+            </div>
+
+            <div className="mt-8 hidden h-[320px] items-end gap-4 rounded-[28px] border border-white/8 bg-black/20 p-6 sm:flex">
+              {metrics.map((metric) => {
+                const height = Math.max(metric.value * 18, 18);
+                return (
+                  <div key={metric.label} className="flex min-w-0 flex-1 flex-col items-center gap-3">
+                    <div
+                      className="w-full rounded-t-[18px] bg-gradient-to-t from-[#00FF88] via-[#00D4FF] to-[#7A5CFF]"
+                      style={{ height: `${Math.min(height, 100)}%` }}
+                    />
+                    <span className="text-center text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)] break-words">
+                      {metric.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </Panel>
     </div>
@@ -122,14 +130,33 @@ function MetricCard({
   value: number;
 }) {
   return (
-    <article className="rounded-[24px] border border-white/8 bg-black/20 p-5">
+    <article className="rounded-[24px] border border-white/8 bg-black/20 p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-white">{label}</p>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+        <p className="text-sm font-semibold text-white break-words">{label}</p>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2.5 sm:p-3">
           <Icon className="h-4 w-4 text-[#00D4FF]" />
         </div>
       </div>
-      <p className="mt-4 text-4xl font-black text-white">{value}</p>
+      <p className="mt-4 text-3xl font-black text-white sm:text-4xl">{value}</p>
     </article>
+  );
+}
+
+function MobileTrendRow({ label, value }: { label: string; value: number }) {
+  const width = Math.min(Math.max(value * 12, 14), 100);
+
+  return (
+    <div className="rounded-[20px] border border-white/8 bg-black/20 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-semibold text-white">{label}</p>
+        <span className="text-sm font-semibold text-[#00FF88]">{value}</span>
+      </div>
+      <div className="mt-3 h-2.5 rounded-full bg-white/[0.05]">
+        <div
+          className="h-full rounded-full bg-gradient-to-r from-[#00FF88] via-[#00D4FF] to-[#7A5CFF]"
+          style={{ width: `${width}%` }}
+        />
+      </div>
+    </div>
   );
 }

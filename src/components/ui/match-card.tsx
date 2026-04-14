@@ -18,23 +18,25 @@ export function MatchCard({
     match.status === "Completed" ? "success" : match.status === "Live" ? "danger" : "info";
 
   return (
-    <article className="panel rounded-xl p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs uppercase tracking-[0.3em] text-[color:var(--text-muted)] truncate">
+    <article className="panel overflow-hidden rounded-xl p-3 sm:p-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-full text-[11px] uppercase tracking-[0.2em] text-[color:var(--text-muted)] sm:text-xs sm:tracking-[0.3em]">
           {match.tournament} {match.matchNumber ? `• Match ${match.matchNumber}` : ""}
         </p>
-        <StatusPill label={match.status} tone={tone} />
+        <div className="self-start">
+          <StatusPill label={match.status} tone={tone} />
+        </div>
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
-        <div className="min-w-0 flex-1">
+      <div className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] sm:items-center">
+        <div className="min-w-0">
           <p className="text-xs text-[color:var(--text-muted)]">Home</p>
-          <p className="mt-1 text-sm font-semibold text-white truncate">{match.home}</p>
+          <p className="mt-1 truncate text-sm font-semibold text-white">{match.home}</p>
           <p className="mt-1 text-xs text-[color:var(--text-muted)]">
             Points: <span className="text-white">{match.homePoints ?? 0}</span>
           </p>
         </div>
-        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-center flex-shrink-0">
+        <div className="justify-self-start rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-center sm:justify-self-center">
           <p
             className="text-lg font-black tracking-[0.14em] text-white"
             style={{ fontFamily: "\"Orbitron\", sans-serif" }}
@@ -45,9 +47,9 @@ export function MatchCard({
             Points
           </p>
         </div>
-        <div className="text-right min-w-0 flex-1">
+        <div className="min-w-0 sm:text-right">
           <p className="text-xs text-[color:var(--text-muted)]">Away</p>
-          <p className="mt-1 text-sm font-semibold text-white truncate">{match.away}</p>
+          <p className="mt-1 truncate text-sm font-semibold text-white">{match.away}</p>
           <p className="mt-1 text-xs text-[color:var(--text-muted)]">
             Points: <span className="text-white">{match.awayPoints ?? 0}</span>
           </p>
@@ -59,7 +61,10 @@ export function MatchCard({
           <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">Slots</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {match.slots.map((slot, index) => (
-              <span key={`${match.id}-slot-${index}`} className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-xs text-white">
+              <span
+                key={`${match.id}-slot-${index}`}
+                className="max-w-full rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-xs text-white"
+              >
                 {slot}
               </span>
             ))}
@@ -67,16 +72,16 @@ export function MatchCard({
         </div>
       ) : null}
 
-      <div className="mt-3 flex flex-wrap gap-2 text-xs text-[color:var(--text-muted)]">
+      <div className="mt-3 grid gap-2 text-xs text-[color:var(--text-muted)] sm:flex sm:flex-wrap">
         <Meta icon={CalendarDays} text={match.date} />
         <Meta icon={MapPin} text={match.venue} />
         <Meta icon={Radio} text={match.status === "Live" ? "Broadcasting now" : "Match center"} />
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-2">
+      <div className="mt-3 grid gap-2 sm:flex sm:flex-wrap">
         <Link
           href="/results"
-          className="inline-flex items-center rounded-lg border border-[#00FF88]/30 bg-[#00FF88]/10 px-3 py-2 text-xs font-semibold text-[#00FF88]"
+          className="inline-flex items-center justify-center rounded-lg border border-[#00FF88]/30 bg-[#00FF88]/10 px-3 py-2 text-xs font-semibold text-[#00FF88] sm:justify-start"
         >
           Enter Result
         </Link>
@@ -85,7 +90,7 @@ export function MatchCard({
             type="button"
             onClick={() => void onDelete(match)}
             disabled={deleting}
-            className="inline-flex items-center gap-2 rounded-lg border border-[#FF5470]/30 bg-[#FF5470]/10 px-3 py-2 text-xs font-semibold text-[#FF9BAC] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#FF5470]/30 bg-[#FF5470]/10 px-3 py-2 text-xs font-semibold text-[#FF9BAC] disabled:cursor-not-allowed disabled:opacity-60 sm:justify-start"
           >
             <Trash2 className="h-3.5 w-3.5" />
             {deleting ? "Deleting..." : "Delete Result"}
@@ -104,8 +109,8 @@ function Meta({
   text: string;
 }) {
   return (
-    <span className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-2 py-1.5 text-xs truncate">
-      <Icon className="h-3.5 w-3.5 text-[#00D4FF] flex-shrink-0" />
+    <span className="inline-flex w-full max-w-full items-center gap-2 rounded-full border border-white/8 bg-white/[0.03] px-2 py-1.5 text-xs sm:w-auto">
+      <Icon className="h-3.5 w-3.5 flex-shrink-0 text-[#00D4FF]" />
       <span className="truncate">{text}</span>
     </span>
   );

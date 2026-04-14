@@ -295,6 +295,7 @@ create table if not exists public.tournaments (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   external_competition text not null default 'Shield Esports Tournament',
+  home_team_name text not null default 'Shield Entity',
   format text not null default 'Slot Based',
   player_count integer not null check (player_count > 0),
   slot_count integer not null default 5 check (slot_count > 0),

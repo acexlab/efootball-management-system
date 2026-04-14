@@ -128,48 +128,20 @@ export function ResultEntryForm({ role }: { role: Role }) {
 
     setLoading(true);
 
-    const adminLike = role === "Super Admin" || role === "Admin";
     let tournamentRows:
       | Array<{ id: string; name: string; slot_count: number | null }>
       | null
       | undefined = [];
     let tournamentError: { message: string } | null = null;
 
-    if (adminLike) {
-      const response = await supabase
-        .from("tournaments")
-        .select("id, name, slot_count")
-        .eq("lifecycle_state", "active")
-        .order("created_at", { ascending: false });
+    const response = await supabase
+      .from("tournaments")
+      .select("id, name, slot_count")
+      .eq("lifecycle_state", "active")
+      .order("created_at", { ascending: false });
 
-      tournamentRows = response.data;
-      tournamentError = response.error;
-    } else {
-      const { data: managedRows, error: managedError } = await supabase
-        .from("tournament_participants")
-        .select("tournament_id")
-        .eq("user_id", session.user.id)
-        .in("role", ["captain", "vice_captain"]);
-
-      if (managedError) {
-        tournamentError = managedError;
-      } else {
-        const tournamentIds = (managedRows ?? []).map((item) => item.tournament_id);
-        if (tournamentIds.length) {
-          const response = await supabase
-            .from("tournaments")
-            .select("id, name, slot_count")
-            .in("id", tournamentIds)
-            .eq("lifecycle_state", "active")
-            .order("created_at", { ascending: false });
-
-          tournamentRows = response.data;
-          tournamentError = response.error;
-        } else {
-          tournamentRows = [];
-        }
-      }
-    }
+    tournamentRows = response.data;
+    tournamentError = response.error;
 
     if (tournamentError) {
       setToast(`Tournament access could not be loaded: ${tournamentError.message}`);
@@ -418,12 +390,9 @@ export function ResultEntryForm({ role }: { role: Role }) {
           <div>
             <p className="text-xs uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Final lineup</p>
             <p className="mt-2 text-sm text-white">
-              Select the final players for each slot. Only these players will receive stats.
+              Select the final players. Only selected players will receive stats.
             </p>
           </div>
-          <span className="rounded-full border border-[#00FF88]/20 bg-[#00FF88]/10 px-3 py-1 text-xs font-semibold text-[#00FF88]">
-            {slotCount} slots
-          </span>
         </div>
 
         <div className="mt-4 grid gap-3 xl:grid-cols-2">

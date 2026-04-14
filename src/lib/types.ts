@@ -32,6 +32,7 @@ export type Tournament = {
   players: number;
   status: TournamentStatus;
   lifecycleState?: "active" | "completed";
+  homeTeamName?: string;
   format: string;
   slotCount?: number;
   captainId?: string;
@@ -65,6 +66,8 @@ export type ClubMatch = {
   away: string;
   homeScore: number;
   awayScore: number;
+  homePoints?: number;
+  awayPoints?: number;
   date: string;
   status: MatchStatus;
   venue: string;

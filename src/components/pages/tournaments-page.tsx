@@ -44,7 +44,7 @@ export function TournamentsPage() {
         supabase
           .from("tournaments")
           .select(
-            "id, name, external_competition, format, player_count, slot_count, status, lifecycle_state, captain_id, vice_captain_id, start_date, end_date"
+            "id, name, external_competition, format, player_count, slot_count, status, lifecycle_state, home_team_name, captain_id, vice_captain_id, start_date, end_date"
           )
           .order("start_date", { ascending: true }),
         supabase.from("profiles").select("id, full_name, gamer_tag, role")
@@ -84,6 +84,7 @@ export function TournamentsPage() {
         slotCount: item.slot_count ?? undefined,
         status: normalizeTournamentStatus(item.status),
         lifecycleState: (item.lifecycle_state as "active" | "completed" | null) ?? undefined,
+        homeTeamName: item.home_team_name ?? undefined,
         format: item.format,
         captainId: item.captain_id ?? undefined,
         viceCaptainId: item.vice_captain_id ?? undefined,
@@ -118,6 +119,7 @@ export function TournamentsPage() {
         format: form.format,
         player_count: form.participantIds.length,
         slot_count: form.slotCount,
+        home_team_name: form.teamName || "Shield Entity",
         status: "Ongoing",
         lifecycle_state: "active",
         captain_id: form.captainId,

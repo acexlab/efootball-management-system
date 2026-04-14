@@ -47,22 +47,27 @@ export function MatchesPage() {
       }
     }
 
-    const [{ data: matchRows, error: matchesError }, { data: profiles, error: profilesError }, { data: tournaments, error: tournamentsError }] =
-      await Promise.all([
+    const [
+      { data: matchRows, error: matchesError },
+      { data: profiles, error: profilesError },
+      { data: tournaments, error: tournamentsError },
+      { data: statsRows, error: statsError }
+    ] = await Promise.all([
         supabase
           .from("matches")
           .select(
-            "id, home_player_id, away_player_id, home_score, away_score, scheduled_at, venue, status, tournament_id, match_number"
+            "id, home_player_id, away_player_id, home_score, away_score, scheduled_at, venue, status, tournament_id, match_number, opponent_team"
           )
           .order("scheduled_at", { ascending: false }),
         supabase.from("profiles").select("id, full_name, gamer_tag"),
-        supabase.from("tournaments").select("id, name")
+        supabase.from("tournaments").select("id, name, home_team_name"),
+        supabase.from("match_stats").select("match_id, goals, result")
       ]);
 
-    if (matchesError || profilesError || tournamentsError) {
+    if (matchesError || profilesError || tournamentsError || statsError) {
       setMessage(
         `Match data is unavailable until the full management schema is active. ${
-          matchesError?.message ?? profilesError?.message ?? tournamentsError?.message ?? ""
+          matchesError?.message ?? profilesError?.message ?? tournamentsError?.message ?? statsError?.message ?? ""
         }`.trim()
       );
       setMatches([]);
@@ -74,23 +79,80 @@ export function MatchesPage() {
       (profiles ?? []).map((item) => [item.id, item.gamer_tag || item.full_name || "Player"])
     );
     const tournamentMap = Object.fromEntries((tournaments ?? []).map((item) => [item.id, item.name]));
+    const tournamentTeamMap = Object.fromEntries(
+      (tournaments ?? []).map((item) => [item.id, item.home_team_name || "Shield Entity"])
+    );
+
+    const statsByMatch = (statsRows ?? []).reduce<Record<string, Array<{ goals: number; result: string }>>>(
+      (acc, row) => {
+        const matchId = row.match_id as string;
+        if (!matchId) return acc;
+        if (!acc[matchId]) acc[matchId] = [];
+        acc[matchId].push({
+          goals: (row.goals as number | null) ?? 0,
+          result: String(row.result ?? "").toLowerCase()
+        });
+        return acc;
+      },
+      {}
+    );
+
+    const totalsByTeam = new Map<string, number>();
+    const normalizedMatches = (matchRows ?? []).map((match) => {
+      const matchStats = statsByMatch[match.id] ?? [];
+      const totalGoals = matchStats.reduce((sum, stat) => sum + stat.goals, 0);
+      const homePoints = matchStats.reduce((sum, stat) => {
+        if (stat.result === "win") return sum + 3;
+        if (stat.result === "draw") return sum + 1;
+        return sum;
+      }, 0);
+
+      const awayPoints = matchStats.reduce((sum, stat) => {
+        if (stat.result === "loss") return sum + 3;
+        if (stat.result === "draw") return sum + 1;
+        return sum;
+      }, 0);
+
+      const homeTeam = tournamentTeamMap[match.tournament_id] ?? "Shield Entity";
+      const awayTeam = match.opponent_team || "Opponent Team";
+
+      const homeKey = `${match.tournament_id}:${homeTeam}`;
+      const awayKey = `${match.tournament_id}:${awayTeam}`;
+
+      totalsByTeam.set(homeKey, (totalsByTeam.get(homeKey) ?? 0) + homePoints);
+      totalsByTeam.set(awayKey, (totalsByTeam.get(awayKey) ?? 0) + awayPoints);
+
+      return {
+        match,
+        totalGoals,
+        homeTeam,
+        awayTeam
+      };
+    });
 
     setMatches(
-        (matchRows ?? []).map((match) => ({
+        normalizedMatches.map(({ match, totalGoals, homeTeam, awayTeam }) => {
+          const homeKey = `${match.tournament_id}:${homeTeam}`;
+          const awayKey = `${match.tournament_id}:${awayTeam}`;
+
+          return ({
           id: match.id,
           tournamentId: match.tournament_id,
           matchNumber: (match as { match_number?: number | null }).match_number ?? undefined,
-          home: profileMap[match.home_player_id] ?? "Home Player",
-          away: profileMap[match.away_player_id] ?? "Away Player",
-          homeScore: match.home_score,
-        awayScore: match.away_score,
+          home: homeTeam,
+          away: awayTeam,
+          homeScore: totalGoals,
+          awayScore: 0,
+          homePoints: totalsByTeam.get(homeKey) ?? 0,
+          awayPoints: totalsByTeam.get(awayKey) ?? 0,
         date: match.scheduled_at ? new Date(match.scheduled_at).toLocaleString() : "Not scheduled",
         status: normalizeMatchStatus(match.status),
         venue: match.venue || "Shield Arena",
           tournament: tournamentMap[match.tournament_id] ?? "Tournament",
           slots: [profileMap[match.home_player_id] ?? "Slot 1", profileMap[match.away_player_id] ?? "Slot 2"],
           canDelete: adminLike || manageableTournamentIds.includes(match.tournament_id)
-        }))
+          });
+        })
     );
     setMessage("");
     setLoading(false);

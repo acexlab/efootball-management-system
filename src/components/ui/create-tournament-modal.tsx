@@ -9,6 +9,7 @@ function getTodayDate() {
 
 export type NewTournament = {
   name: string;
+  teamName: string;
   startDate: string;
   endDate: string;
   players: number;
@@ -34,6 +35,7 @@ export function CreateTournamentModal({
   const today = getTodayDate();
   const [form, setForm] = useState<NewTournament>({
     name: "",
+    teamName: "Shield Entity",
     startDate: today,
     endDate: today,
     players: 0,
@@ -116,11 +118,13 @@ export function CreateTournamentModal({
     onCreate({
       ...form,
       name: form.name.trim(),
+      teamName: form.teamName.trim() || "Shield Entity",
       format: form.format.trim() || "Slot Based",
       players: form.participantIds.length
     });
     setForm({
       name: "",
+      teamName: "Shield Entity",
       startDate: today,
       endDate: today,
       players: 0,
@@ -163,6 +167,12 @@ export function CreateTournamentModal({
             value={form.name}
             onChange={(value) => setForm((state) => ({ ...state, name: value }))}
             placeholder="Shield Series A"
+          />
+          <Field
+            label="Our team name"
+            value={form.teamName}
+            onChange={(value) => setForm((state) => ({ ...state, teamName: value }))}
+            placeholder="Shield Entity"
           />
           <Field
             label="Format"

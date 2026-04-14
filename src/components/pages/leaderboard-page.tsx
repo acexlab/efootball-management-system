@@ -8,6 +8,7 @@ import { Panel } from "@/components/ui/panel";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { useAuthProfile } from "@/hooks/use-auth-profile";
 import { mapClubLeaderboardRows } from "@/lib/supabase/club-leaderboard";
+import { syncClubLeaderboardFromStats } from "@/lib/supabase/club-operations";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { LeaderboardRow } from "@/lib/types";
 
@@ -31,12 +32,19 @@ export function LeaderboardPage() {
     }
 
     setLoading(true);
+
+    try {
+      await syncClubLeaderboardFromStats(supabase);
+    } catch (syncError) {
+      const detail = syncError instanceof Error ? syncError.message : "Leaderboard refresh failed.";
+      setMessage(detail);
+    }
+
     const { data, error } = await supabase
       .from("club_leaderboard")
       .select(
         "id, player_id, player_name, player_handle, club_name, image_url, matches, wins, draws, losses, goals_scored, goals_conceded, goal_difference, points"
-      )
-      .eq("club_name", profile.club);
+      );
 
     if (error) {
       setMessage(`Leaderboard data is not ready yet. ${error.message}`);

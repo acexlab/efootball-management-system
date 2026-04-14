@@ -11,6 +11,7 @@ import { Panel } from "@/components/ui/panel";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { StatusPill } from "@/components/ui/status-pill";
 import { useAuthProfile } from "@/hooks/use-auth-profile";
+import { syncClubLeaderboardFromStats } from "@/lib/supabase/club-operations";
 import { hasPermission } from "@/lib/rbac";
 import { emptyClubLeaderboard, mapClubLeaderboardRows } from "@/lib/supabase/club-leaderboard";
 import { getSupabaseBrowserClient, hasSupabaseConfig } from "@/lib/supabase/client";
@@ -30,6 +31,7 @@ export function DashboardPage() {
 
   const [rows, setRows] = useState<LeaderboardRow[]>(emptyClubLeaderboard);
   const [recentMatches, setRecentMatches] = useState<ClubMatch[]>([]);
+  const [nextMatch, setNextMatch] = useState<ClubMatch | null>(null);
   const [activeTournament, setActiveTournament] = useState<TournamentSummary | null>(null);
   const [rowsLoading, setRowsLoading] = useState(supabaseReady);
   const [statusMessage, setStatusMessage] = useState("");
@@ -46,6 +48,7 @@ export function DashboardPage() {
       if (!supabase || !activeSession) {
         setRows(emptyClubLeaderboard);
         setRecentMatches([]);
+        setNextMatch(null);
         setActiveTournament(null);
         setRowsLoading(false);
         return;
@@ -54,27 +57,36 @@ export function DashboardPage() {
       setRowsLoading(true);
       setDbMessage("");
 
-      const [leaderboardResult, tournamentsResult, matchesResult, profilesResult] = await Promise.all([
+      try {
+        await syncClubLeaderboardFromStats(supabase);
+      } catch (syncError) {
+        const detail = syncError instanceof Error ? syncError.message : "Leaderboard refresh failed.";
+        setDbMessage(`Leaderboard sync skipped: ${detail}`);
+      }
+
+      const [leaderboardResult, tournamentsResult, matchesResult, profilesResult, statsResult] = await Promise.all([
         supabase
           .from("club_leaderboard")
           .select(
             "id, player_id, player_name, player_handle, club_name, image_url, matches, wins, draws, losses, goals_scored, goals_conceded, goal_difference, points"
           )
-          .eq("club_name", profile.club)
           .order("points", { ascending: false })
           .order("goals_scored", { ascending: false })
           .order("wins", { ascending: false }),
         supabase
           .from("tournaments")
-          .select("id, name, status")
+          .select("id, name, status, home_team_name, lifecycle_state")
           .order("created_at", { ascending: false })
-          .limit(1),
+          .limit(50),
         supabase
           .from("matches")
-          .select("id, home_player_id, away_player_id, home_score, away_score, scheduled_at, venue, status, tournament_id, match_number")
+          .select(
+            "id, home_player_id, away_player_id, home_score, away_score, scheduled_at, venue, status, tournament_id, match_number, opponent_team"
+          )
           .order("scheduled_at", { ascending: false })
-          .limit(5),
-        supabase.from("profiles").select("id, full_name, gamer_tag")
+          .limit(50),
+        supabase.from("profiles").select("id, full_name, gamer_tag"),
+        supabase.from("match_stats").select("match_id, goals, result")
       ]);
 
       if (leaderboardResult.error) {
@@ -87,7 +99,9 @@ export function DashboardPage() {
       if (tournamentsResult.error) {
         setActiveTournament(null);
       } else {
-        const tournament = tournamentsResult.data?.[0];
+        const tournament =
+          tournamentsResult.data?.find((item) => item.lifecycle_state === "active" || item.status === "Ongoing") ??
+          tournamentsResult.data?.[0];
         if (tournament) {
           const { count } = await supabase
             .from("matches")
@@ -114,25 +128,73 @@ export function DashboardPage() {
           item.name
         ])
       );
+      const homeTeamMap = Object.fromEntries(
+        (
+          (tournamentsResult.data as Array<{ id: string; home_team_name: string | null }> | null) ?? []
+        ).map((item) => [item.id, item.home_team_name || "Shield Entity"])
+      );
+      const statsByMatch = (statsResult.data ?? []).reduce<Record<string, Array<{ goals: number; result: string }>>>(
+        (acc, row) => {
+          const matchId = row.match_id as string | null;
+          if (!matchId) return acc;
+          if (!acc[matchId]) acc[matchId] = [];
+          acc[matchId].push({
+            goals: Number(row.goals ?? 0),
+            result: String(row.result ?? "").toLowerCase()
+          });
+          return acc;
+        },
+        {}
+      );
 
       if (!matchesResult.error) {
-        setRecentMatches(
-          (matchesResult.data ?? []).map((match) => ({
-            id: match.id,
-            matchNumber: match.match_number ?? undefined,
-            home: profileMap[match.home_player_id] ?? "Home Player",
-            away: profileMap[match.away_player_id] ?? "Away Player",
-            homeScore: match.home_score ?? 0,
-            awayScore: match.away_score ?? 0,
-            date: match.scheduled_at ? new Date(match.scheduled_at).toLocaleString() : "Not scheduled",
-            status: normalizeMatchStatus(match.status),
-            venue: match.venue || "Shield Arena",
-            tournament: tournamentMap[match.tournament_id] ?? "Tournament",
-            slots: [profileMap[match.home_player_id] ?? "Slot 1", profileMap[match.away_player_id] ?? "Slot 2"]
-          }))
-        );
+        const normalizedMatches = (matchesResult.data ?? []).map((match) => {
+          const matchStats = statsByMatch[match.id] ?? [];
+          const homePoints = matchStats.reduce((sum, stat) => {
+            if (stat.result === "win") return sum + 3;
+            if (stat.result === "draw") return sum + 1;
+            return sum;
+          }, 0);
+          const awayPoints = matchStats.reduce((sum, stat) => {
+            if (stat.result === "loss") return sum + 3;
+            if (stat.result === "draw") return sum + 1;
+            return sum;
+          }, 0);
+
+          return {
+            scheduledSortValue: match.scheduled_at ? new Date(match.scheduled_at).getTime() : Number.MAX_SAFE_INTEGER,
+            card: {
+              id: match.id,
+              matchNumber: match.match_number ?? undefined,
+              home: homeTeamMap[match.tournament_id] ?? profileMap[match.home_player_id] ?? "Home Team",
+              away: match.opponent_team?.trim() || profileMap[match.away_player_id] || "Away Team",
+              homeScore: match.home_score ?? 0,
+              awayScore: match.away_score ?? 0,
+              homePoints,
+              awayPoints,
+              date: match.scheduled_at ? new Date(match.scheduled_at).toLocaleString() : "Not scheduled",
+              status: normalizeMatchStatus(match.status),
+              venue: match.venue || "Shield Arena",
+              tournament: tournamentMap[match.tournament_id] ?? "Tournament",
+              slots: [profileMap[match.home_player_id] ?? "Slot 1", profileMap[match.away_player_id] ?? "Slot 2"]
+            } satisfies ClubMatch
+          };
+        });
+
+        const upcomingMatches = [...normalizedMatches]
+          .filter((match) => match.card.status === "Upcoming")
+          .sort((a, b) => a.scheduledSortValue - b.scheduledSortValue)
+          .map((match) => match.card);
+        const completedMatches = [...normalizedMatches]
+          .filter((match) => match.card.status !== "Upcoming")
+          .sort((a, b) => b.scheduledSortValue - a.scheduledSortValue)
+          .map((match) => match.card);
+
+        setNextMatch(upcomingMatches[0] ?? null);
+        setRecentMatches(completedMatches);
       } else {
         setRecentMatches([]);
+        setNextMatch(null);
       }
 
       setRowsLoading(false);
@@ -179,11 +241,7 @@ export function DashboardPage() {
     setStatusMessage("Signed out.");
   }
 
-  const topPlayers = useMemo(() => rows.slice(0, 5), [rows]);
-  const nextMatch = useMemo(
-    () => recentMatches.find((match) => match.status === "Upcoming") ?? recentMatches[0] ?? null,
-    [recentMatches]
-  );
+  const topPlayers = useMemo(() => rows.slice(0, 3), [rows]);
 
   return (
     <div className="space-y-4">

@@ -30,18 +30,27 @@ export function MatchCard({
         <div className="min-w-0 flex-1">
           <p className="text-xs text-[color:var(--text-muted)]">Home</p>
           <p className="mt-1 text-sm font-semibold text-white truncate">{match.home}</p>
+          <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+            Points: <span className="text-white">{match.homePoints ?? 0}</span>
+          </p>
         </div>
         <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-center flex-shrink-0">
           <p
             className="text-lg font-black tracking-[0.14em] text-white"
             style={{ fontFamily: "\"Orbitron\", sans-serif" }}
           >
-            {match.homeScore} : {match.awayScore}
+            {(match.homePoints ?? match.homeScore)} : {(match.awayPoints ?? match.awayScore)}
+          </p>
+          <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-[color:var(--text-muted)]">
+            Points
           </p>
         </div>
         <div className="text-right min-w-0 flex-1">
           <p className="text-xs text-[color:var(--text-muted)]">Away</p>
           <p className="mt-1 text-sm font-semibold text-white truncate">{match.away}</p>
+          <p className="mt-1 text-xs text-[color:var(--text-muted)]">
+            Points: <span className="text-white">{match.awayPoints ?? 0}</span>
+          </p>
         </div>
       </div>
 

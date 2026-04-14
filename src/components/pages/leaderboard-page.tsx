@@ -14,7 +14,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { LeaderboardRow } from "@/lib/types";
 
 export function LeaderboardPage() {
-  const { session, profile } = useAuthProfile();
+  const { session } = useAuthProfile();
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
@@ -24,7 +24,7 @@ export function LeaderboardPage() {
   const loadLeaderboard = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
 
-    if (!supabase || !session) {
+    if (!supabase) {
       setLeaderboard([]);
       setLoading(false);
       return;
@@ -32,11 +32,13 @@ export function LeaderboardPage() {
 
     setLoading(true);
 
-    try {
-      await syncClubLeaderboardFromStats(supabase);
-    } catch (syncError) {
-      const detail = syncError instanceof Error ? syncError.message : "Leaderboard refresh failed.";
-      setMessage(detail);
+    if (session) {
+      try {
+        await syncClubLeaderboardFromStats(supabase);
+      } catch (syncError) {
+        const detail = syncError instanceof Error ? syncError.message : "Leaderboard refresh failed.";
+        setMessage(detail);
+      }
     }
 
     const { data, error } = await supabase
@@ -55,7 +57,7 @@ export function LeaderboardPage() {
     setLeaderboard(mapClubLeaderboardRows(data ?? []));
     setMessage("");
     setLoading(false);
-  }, [profile.club, session]);
+  }, [session]);
 
   const syncLeaderboard = useEffectEvent(() => {
     void loadLeaderboard();
@@ -63,7 +65,7 @@ export function LeaderboardPage() {
 
   useEffect(() => {
     syncLeaderboard();
-  }, [session, profile.club]);
+  }, [session]);
 
   const sortedRows = useMemo(() => {
     return rankLeaderboardRows(leaderboard, sortBy);
@@ -118,11 +120,9 @@ export function LeaderboardPage() {
         ) : (
           <EmptyState
             icon={Trophy}
-            title={session ? "No leaderboard entries yet" : "Sign in to view leaderboard"}
+            title="No leaderboard entries yet"
             description={
-              session
-                ? "The leaderboard will populate after match results are saved."
-                : "Authenticate first to load your club rankings."
+              "The leaderboard will populate after match results are saved."
             }
           />
         )}

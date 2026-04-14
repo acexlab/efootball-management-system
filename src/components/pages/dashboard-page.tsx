@@ -45,7 +45,7 @@ export function DashboardPage() {
   const loadDashboardData = useCallback(
     async (activeSession: Session | null) => {
       const supabase = getSupabaseBrowserClient();
-      if (!supabase || !activeSession) {
+      if (!supabase) {
         setRows(emptyClubLeaderboard);
         setRecentMatches([]);
         setNextMatch(null);
@@ -57,11 +57,13 @@ export function DashboardPage() {
       setRowsLoading(true);
       setDbMessage("");
 
-      try {
-        await syncClubLeaderboardFromStats(supabase);
-      } catch (syncError) {
-        const detail = syncError instanceof Error ? syncError.message : "Leaderboard refresh failed.";
-        setDbMessage(`Leaderboard sync skipped: ${detail}`);
+      if (activeSession) {
+        try {
+          await syncClubLeaderboardFromStats(supabase);
+        } catch (syncError) {
+          const detail = syncError instanceof Error ? syncError.message : "Leaderboard refresh failed.";
+          setDbMessage(`Leaderboard sync skipped: ${detail}`);
+        }
       }
 
       const [leaderboardResult, tournamentsResult, matchesResult, profilesResult, statsResult] = await Promise.all([
@@ -202,12 +204,11 @@ export function DashboardPage() {
     [profile.club]
   );
 
-  const syncDashboard = useEffectEvent((activeSession: Session) => {
+  const syncDashboard = useEffectEvent((activeSession: Session | null) => {
     void loadDashboardData(activeSession);
   });
 
   useEffect(() => {
-    if (!session) return;
     syncDashboard(session);
   }, [session]);
 
@@ -222,7 +223,9 @@ export function DashboardPage() {
     setStatusMessage("");
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: typeof window !== "undefined" ? `${window.location.origin}/` : undefined }
+      options: {
+        redirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined
+      }
     });
 
     if (error) {
@@ -248,7 +251,7 @@ export function DashboardPage() {
       <Panel className="p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SectionHeading
-            eyebrow={profile.club}
+            eyebrow={profile.club || "Shield Esports"}
             title="Dashboard"
             description="Action-first control center for tournaments, matches, and leaderboard."
           />
@@ -366,7 +369,7 @@ export function DashboardPage() {
             description="Current top performers ranked by balanced performance, with losses penalized."
           />
           <div className="mt-4">
-            {rowsLoading && signedIn ? (
+            {rowsLoading ? (
               <div className="flex min-h-[180px] items-center justify-center rounded-lg border border-white/8 bg-black/20 text-sm text-[color:var(--text-muted)]">
                 Loading leaderboard...
               </div>
@@ -381,6 +384,7 @@ export function DashboardPage() {
           </div>
         </Panel>
       </div>
+
     </div>
   );
 }

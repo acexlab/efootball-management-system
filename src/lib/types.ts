@@ -47,6 +47,7 @@ export type TournamentTeam = {
   id: string;
   tournamentId: string;
   name: string;
+  logoUrl?: string;
   playersPerTeam: number;
   subsPerTeam: number;
 };

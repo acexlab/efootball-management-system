@@ -323,11 +323,15 @@ create table if not exists public.tournament_teams (
   id uuid primary key default gen_random_uuid(),
   tournament_id uuid not null references public.tournaments(id) on delete cascade,
   name text not null,
+  logo_url text,
   players_per_team integer not null check (players_per_team > 0),
   subs_per_team integer not null default 0 check (subs_per_team >= 0),
   created_at timestamptz not null default now(),
   unique (tournament_id, name)
 );
+
+alter table public.tournament_teams
+add column if not exists logo_url text;
 
 create table if not exists public.team_players (
   team_id uuid not null references public.tournament_teams(id) on delete cascade,

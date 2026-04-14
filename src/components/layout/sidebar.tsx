@@ -12,6 +12,7 @@ import {
   Menu,
   Settings,
   Shield,
+  ShieldPlus,
   Swords,
   Trophy,
   Users,
@@ -43,6 +44,7 @@ const navSections: Array<{ title: string; items: NavItem[] }> = [
     title: "Tournaments",
     items: [
       { href: "/tournaments", label: "Tournaments", icon: Trophy, permission: "manage:tournaments" },
+      { href: "/teams", label: "Teams", icon: ShieldPlus },
       { href: "/matches", label: "Matches", icon: Swords },
       { href: "/results", label: "Result Entry", icon: ClipboardList }
     ]

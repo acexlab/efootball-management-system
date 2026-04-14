@@ -141,8 +141,34 @@ export function ProfilePage() {
     }
 
     const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-    setDraft((state) => ({ ...state, avatarUrl: data.publicUrl }));
-    setMessage("Photo uploaded. Save profile to apply it everywhere.");
+    const publicUrl = data.publicUrl;
+
+    // Immediately update database with new avatar URL
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ avatar_url: publicUrl })
+      .eq("id", session.user.id);
+
+    if (updateError) {
+      setMessage(`Photo uploaded but database update failed: ${updateError.message}`);
+      setUploading(false);
+      return;
+    }
+
+    // Update auth metadata
+    await supabase.auth.updateUser({
+      data: { avatar_url: publicUrl }
+    });
+
+    // Update local UI state
+    setDraft((state) => ({ ...state, avatarUrl: publicUrl }));
+    
+    // Trigger profile refresh event to update all components immediately
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("efcms:profile-updated"));
+    }
+
+    setMessage("Photo updated successfully!");
     setUploading(false);
   }
 

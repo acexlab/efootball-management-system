@@ -33,11 +33,14 @@ export function MatchLineupManager({
   const [tournaments, setTournaments] = useState<TournamentOption[]>([]);
   const [teams, setTeams] = useState<TournamentTeam[]>([]);
   const [teamPlayers, setTeamPlayers] = useState<TeamPlayer[]>([]);
+  const [rosterOptions, setRosterOptions] = useState<TeamPlayer[]>([]);
+  const [rosterPlayers, setRosterPlayers] = useState<string[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState("");
   const [selectedTeamId, setSelectedTeamId] = useState("");
   const [matchNumber, setMatchNumber] = useState("1");
   const [mainPlayers, setMainPlayers] = useState<string[]>([]);
   const [subPlayers, setSubPlayers] = useState<string[]>([]);
+  const [savingRoster, setSavingRoster] = useState(false);
 
   const selectedTeam = teams.find((team) => team.id === selectedTeamId) ?? null;
   const canEditTournament = canManageAll || manageableTournamentIds.includes(selectedTournamentId);
@@ -130,6 +133,61 @@ export function MatchLineupManager({
     []
   );
 
+  const loadRosterState = useCallback(
+    async (tournamentId: string, teamId: string) => {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase || !tournamentId || !teamId) return;
+
+      const { data: participantRows, error: participantError } = await supabase
+        .from("tournament_participants")
+        .select("user_id, profiles!inner(full_name, gamer_tag)")
+        .eq("tournament_id", tournamentId);
+
+      if (participantError) {
+        setRosterOptions([]);
+        setRosterPlayers([]);
+        setMessage(`Could not load tournament squad: ${participantError.message}`);
+        return;
+      }
+
+      const options = (participantRows ?? []).map((row) => ({
+        id: row.user_id,
+        name:
+          (row.profiles as { full_name?: string | null; gamer_tag?: string | null } | null)?.gamer_tag ||
+          (row.profiles as { full_name?: string | null; gamer_tag?: string | null } | null)?.full_name ||
+          "Player"
+      }));
+
+      setRosterOptions(options);
+
+      const { data: rosterRows, error: rosterError } = await supabase
+        .from("team_players")
+        .select("player_id")
+        .eq("team_id", teamId);
+
+      if (rosterError) {
+        if (
+          rosterError.message.includes("Could not find the table 'public.team_players'") ||
+          rosterError.message.includes("relation \"public.team_players\" does not exist")
+        ) {
+          setMessage("Run the latest full-management-setup.sql to enable squad swaps.");
+          setRosterPlayers([]);
+          return;
+        }
+
+        setMessage(`Could not load squad roster: ${rosterError.message}`);
+        setRosterPlayers([]);
+        return;
+      }
+
+      const savedRoster = (rosterRows ?? []).map((row) => row.player_id);
+      const nextRoster = savedRoster.length ? savedRoster : options.map((item) => item.id);
+      setRosterPlayers(nextRoster);
+      setTeamPlayers(options.filter((player) => nextRoster.includes(player.id)));
+    },
+    []
+  );
+
   const loadOptions = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
@@ -209,15 +267,26 @@ export function MatchLineupManager({
     if (initialTeamId) {
       const suggestedMatchNumber = await loadSuggestedMatchNumber(initialTournamentId);
       await loadLineupState(initialTournamentId, initialTeamId, suggestedMatchNumber);
+      await loadRosterState(initialTournamentId, initialTeamId);
     } else {
       setMatchNumber("1");
       setTeamPlayers([]);
       setMainPlayers([]);
       setSubPlayers([]);
+      setRosterOptions([]);
+      setRosterPlayers([]);
     }
 
     setLoading(false);
-  }, [canManageAll, loadLineupState, loadSuggestedMatchNumber, manageableTournamentIds, selectedTeamId, selectedTournamentId]);
+  }, [
+    canManageAll,
+    loadLineupState,
+    loadRosterState,
+    loadSuggestedMatchNumber,
+    manageableTournamentIds,
+    selectedTeamId,
+    selectedTournamentId
+  ]);
 
   const syncOptions = useEffectEvent(() => {
     void loadOptions();
@@ -269,9 +338,12 @@ export function MatchLineupManager({
     if (nextTeamId) {
       const suggestedMatchNumber = await loadSuggestedMatchNumber(tournamentId);
       await loadLineupState(tournamentId, nextTeamId, suggestedMatchNumber);
+      await loadRosterState(tournamentId, nextTeamId);
     } else {
       setMatchNumber("1");
       setTeamPlayers([]);
+      setRosterOptions([]);
+      setRosterPlayers([]);
     }
   }
 
@@ -281,6 +353,7 @@ export function MatchLineupManager({
     setSubPlayers([]);
     if (selectedTournamentId && teamId) {
       await loadLineupState(selectedTournamentId, teamId, matchNumber);
+      await loadRosterState(selectedTournamentId, teamId);
     }
   }
 
@@ -289,6 +362,14 @@ export function MatchLineupManager({
     if (selectedTournamentId && selectedTeamId) {
       await loadLineupState(selectedTournamentId, selectedTeamId, value);
     }
+  }
+
+  function toggleRosterPlayer(playerId: string) {
+    setRosterPlayers((current) => {
+      const exists = current.includes(playerId);
+      if (exists) return current.filter((item) => item !== playerId);
+      return [...current, playerId];
+    });
   }
 
   function toggleSelection(playerId: string, role: LineupRole) {
@@ -434,6 +515,61 @@ export function MatchLineupManager({
     setSaving(false);
   }
 
+  async function handleSaveRoster() {
+    if (!canEditTournament) {
+      setMessage("You can only edit lineups for tournaments you captain.");
+      return;
+    }
+
+    if (!selectedTournamentId || !selectedTeamId || !selectedTeam) {
+      setMessage("Select tournament and team first.");
+      return;
+    }
+
+    const minPlayers = selectedTeam.playersPerTeam + selectedTeam.subsPerTeam;
+    if (rosterPlayers.length < minPlayers) {
+      setMessage(`Select at least ${minPlayers} players for the roster.`);
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    setSavingRoster(true);
+    setMessage("");
+
+    const { error: deleteError } = await supabase
+      .from("team_players")
+      .delete()
+      .eq("team_id", selectedTeamId);
+
+    if (deleteError) {
+      setMessage(`Roster could not be cleared: ${deleteError.message}`);
+      setSavingRoster(false);
+      return;
+    }
+
+    const rosterRows = rosterPlayers.map((playerId) => ({
+      team_id: selectedTeamId,
+      player_id: playerId
+    }));
+
+    const { error: rosterError } = await supabase.from("team_players").insert(rosterRows);
+
+    if (rosterError) {
+      setMessage(`Roster could not be saved: ${rosterError.message}`);
+      setSavingRoster(false);
+      return;
+    }
+
+    const updatedRoster = rosterOptions.filter((player) => rosterPlayers.includes(player.id));
+    setTeamPlayers(updatedRoster);
+    setMainPlayers((current) => current.filter((playerId) => rosterPlayers.includes(playerId)));
+    setSubPlayers((current) => current.filter((playerId) => rosterPlayers.includes(playerId)));
+    setMessage("Tournament roster updated.");
+    setSavingRoster(false);
+  }
+
   return (
     <Panel className="p-4 sm:p-5">
       <SectionHeading eyebrow="Tournament options" title="Match Day Player Selection" />
@@ -485,6 +621,42 @@ export function MatchLineupManager({
               <StatusPill label={`${teamPlayers.length} Available`} tone="neutral" />
             </div>
           ) : null}
+
+          <div className="mt-4 rounded-2xl border border-white/8 bg-black/20 p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-white">Tournament Roster</p>
+                <p className="text-xs text-[color:var(--text-muted)]">
+                  Select the players who are available for this tournament. Minimum{" "}
+                  {(selectedTeam?.playersPerTeam ?? 0) + (selectedTeam?.subsPerTeam ?? 0)} players.
+                </p>
+              </div>
+              <span className="text-xs text-[color:var(--text-muted)]">
+                {rosterPlayers.length}/{rosterOptions.length} selected
+              </span>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {rosterOptions.map((player) => (
+                <ToggleRow
+                  key={`roster-${player.id}`}
+                  name={player.name}
+                  checked={rosterPlayers.includes(player.id)}
+                  disabled={!canEditTournament}
+                  onClick={() => toggleRosterPlayer(player.id)}
+                />
+              ))}
+            </div>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => void handleSaveRoster()}
+                disabled={!canEditTournament || !selectedTeam || savingRoster}
+                className="w-full rounded-lg border border-[#00D4FF]/30 bg-[#00D4FF]/10 px-4 py-2 text-sm font-semibold text-[#00D4FF] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              >
+                {savingRoster ? "Saving..." : "Save Roster"}
+              </button>
+            </div>
+          </div>
 
           <div className="mt-4 grid gap-4 2xl:grid-cols-2">
             <div className="rounded-2xl border border-white/8 bg-black/20 p-4">

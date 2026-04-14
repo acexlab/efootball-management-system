@@ -8,7 +8,7 @@ import { UserAvatar } from "@/components/ui/user-avatar";
 
 export function Topbar() {
   const { session, loading, profile } = useAuthProfile();
-  const signedInLabel = session?.user.email?.split("@")[0] ?? profile.handle;
+  const signedInLabel = profile.handle || profile.name;
   const stateLabel = loading ? "Syncing" : session ? profile.role : "Guest";
   const stateText = loading
     ? "Checking account session"

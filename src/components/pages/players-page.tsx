@@ -29,12 +29,14 @@ type PlayerRow = {
   matches: number;
   goals: number;
   points: number;
+  trend: number[];
 };
 
 export function PlayersPage() {
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [loading, setLoading] = useState(hasSupabaseConfig());
   const [message, setMessage] = useState("");
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerRow | null>(null);
 
   const loadPlayers = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -76,6 +78,41 @@ export function PlayersPage() {
       ])
     );
 
+    const { data: matchRows } = await supabase
+      .from("matches")
+      .select("id, match_number, created_at, scheduled_at");
+
+    const matchMap = Object.fromEntries(
+      (matchRows ?? []).map((match) => [
+        match.id as string,
+        {
+          matchNumber: (match.match_number as number | null) ?? 0,
+          createdAt: (match.created_at as string | null) ?? "",
+          scheduledAt: (match.scheduled_at as string | null) ?? ""
+        }
+      ])
+    );
+
+    const { data: statRows } = await supabase
+      .from("match_stats")
+      .select("player_id, goals, result, match_id");
+
+    const perPlayerStats = (statRows ?? []).reduce<Record<string, Array<{
+      goals: number;
+      result: "win" | "draw" | "loss";
+      matchId: string;
+    }>>>((acc, row) => {
+      const playerId = row.player_id as string;
+      if (!playerId) return acc;
+      if (!acc[playerId]) acc[playerId] = [];
+      acc[playerId].push({
+        goals: (row.goals as number | null) ?? 0,
+        result: row.result as "win" | "draw" | "loss",
+        matchId: row.match_id as string
+      });
+      return acc;
+    }, {});
+
     setPlayers(
       profileRows.map((profile) => ({
         id: profile.id,
@@ -86,7 +123,8 @@ export function PlayersPage() {
         avatarUrl: profile.avatar_url,
         matches: statsMap[profile.id]?.matches ?? 0,
         goals: statsMap[profile.id]?.goals ?? 0,
-        points: statsMap[profile.id]?.points ?? 0
+        points: statsMap[profile.id]?.points ?? 0,
+        trend: buildTrendSeriesFromStats(perPlayerStats[profile.id] ?? [], matchMap)
       }))
     );
     setMessage("");
@@ -116,7 +154,7 @@ export function PlayersPage() {
 
   return (
     <div className="space-y-6">
-      <Panel className="p-6">
+      <Panel className="p-5 sm:p-6">
         <SectionHeading
           eyebrow="Squad roster"
           title="Players"
@@ -129,17 +167,19 @@ export function PlayersPage() {
         ) : null}
       </Panel>
 
-      <Panel className="p-6">
+      <Panel className="p-5 sm:p-6">
         {loading ? (
           <div className="flex min-h-[260px] items-center justify-center rounded-[28px] border border-white/8 bg-black/20 text-sm text-[color:var(--text-muted)]">
             Loading player roster...
           </div>
         ) : players.length ? (
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {players.map((player) => (
-              <article
+              <button
+                type="button"
                 key={player.id}
-                className="overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-5"
+                onClick={() => setSelectedPlayer(player)}
+                className="group w-full overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] p-5 text-left transition hover:border-[#00D4FF]/30 hover:bg-white/[0.04]"
               >
                 <div className="flex items-start gap-4">
                   <UserAvatar src={player.avatarUrl} name={player.name} className="h-24 w-24 rounded-[24px]" />
@@ -159,7 +199,10 @@ export function PlayersPage() {
                   <StatCard label="Matches" value={player.matches} />
                   <StatCard label="Points" value={player.points} />
                 </div>
-              </article>
+                <p className="mt-4 text-xs uppercase tracking-[0.24em] text-[#00D4FF]/80">
+                  View performance
+                </p>
+              </button>
             ))}
           </div>
         ) : (
@@ -170,6 +213,57 @@ export function PlayersPage() {
           />
         )}
       </Panel>
+
+      {selectedPlayer ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setSelectedPlayer(null)}
+            aria-label="Close player performance"
+          />
+          <div className="relative w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/10 bg-[#0b0f14] p-6 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <UserAvatar
+                  src={selectedPlayer.avatarUrl}
+                  name={selectedPlayer.name}
+                  className="h-20 w-20 rounded-[20px]"
+                />
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-[color:var(--text-muted)]">
+                    {selectedPlayer.club}
+                  </p>
+                  <h3 className="mt-2 text-2xl font-semibold text-white">{selectedPlayer.handle}</h3>
+                  <p className="text-sm text-[color:var(--text-muted)]">{selectedPlayer.name}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedPlayer(null)}
+                className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs text-white"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+              <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-white">Performance trend</p>
+                  <span className="text-xs text-[#00FF88]">Rising form</span>
+                </div>
+                <PerformanceChart player={selectedPlayer} />
+              </div>
+              <div className="grid gap-3">
+                <StatCard label="Goals" value={selectedPlayer.goals} />
+                <StatCard label="Matches" value={selectedPlayer.matches} />
+                <StatCard label="Points" value={selectedPlayer.points} />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -188,4 +282,78 @@ function StatCard({ label, value }: { label: string; value: number }) {
       <p className="mt-3 text-2xl font-black text-white">{value}</p>
     </div>
   );
+}
+
+function PerformanceChart({ player }: { player: PlayerRow }) {
+  const series = player.trend.length ? player.trend : buildDefaultTrendSeries();
+  const maxValue = Math.max(...series, 1);
+  const minValue = Math.min(...series, 0);
+  const range = maxValue - minValue || 1;
+
+  const points = series.map((value, index) => {
+    const x = (index / (series.length - 1)) * 100;
+    const y = 40 - ((value - minValue) / range) * 40;
+    return { x, y };
+  });
+
+  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`).join(" ");
+  const areaPath = `${linePath} L 100 40 L 0 40 Z`;
+
+  return (
+    <div className="mt-4">
+      <svg viewBox="0 0 100 40" className="h-28 w-full">
+        <defs>
+          <linearGradient id="shield-line" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="#00FF88" />
+            <stop offset="50%" stopColor="#00D4FF" />
+            <stop offset="100%" stopColor="#7A5CFF" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill="url(#shield-line)" opacity="0.12" />
+        <path d={linePath} fill="none" stroke="url(#shield-line)" strokeWidth="2" />
+        {points.map((point, index) => (
+          <circle key={index} cx={point.x} cy={point.y} r="1.5" fill="#00FF88" opacity={index === points.length - 1 ? 1 : 0.6} />
+        ))}
+      </svg>
+      <div className="mt-3 flex items-center justify-between text-xs text-[color:var(--text-muted)]">
+        <span>Start</span>
+        <span>Current</span>
+      </div>
+    </div>
+  );
+}
+
+function buildDefaultTrendSeries() {
+  return Array.from({ length: 10 }, () => 0);
+}
+
+function buildTrendSeriesFromStats(
+  stats: Array<{ goals: number; result: "win" | "draw" | "loss"; matchId: string }>,
+  matchMap: Record<string, { matchNumber: number; createdAt: string; scheduledAt: string }>
+) {
+  if (!stats.length) return buildDefaultTrendSeries();
+
+  const ordered = [...stats].sort((a, b) => {
+    const matchA = matchMap[a.matchId];
+    const matchB = matchMap[b.matchId];
+    const numberDiff = (matchA?.matchNumber ?? 0) - (matchB?.matchNumber ?? 0);
+    if (numberDiff !== 0) return numberDiff;
+    const dateA = new Date(matchA?.scheduledAt || matchA?.createdAt || 0).getTime();
+    const dateB = new Date(matchB?.scheduledAt || matchB?.createdAt || 0).getTime();
+    return dateA - dateB;
+  });
+
+  const cumulative: number[] = [];
+  let total = 0;
+  for (const item of ordered) {
+    total += item.result === "win" ? 3 : item.result === "draw" ? 1 : 0;
+    cumulative.push(total);
+  }
+
+  if (cumulative.length >= 10) {
+    return cumulative.slice(-10);
+  }
+
+  const padding = Array.from({ length: 10 - cumulative.length }, () => (cumulative[0] ?? 0));
+  return [...padding, ...cumulative];
 }

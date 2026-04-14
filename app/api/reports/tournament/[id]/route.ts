@@ -463,8 +463,9 @@ export async function GET(
   });
 
   const pdfBytes = await pdf.save();
+  const body = new Uint8Array(pdfBytes);
 
-  return new NextResponse(pdfBytes, {
+  return new NextResponse(body, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",

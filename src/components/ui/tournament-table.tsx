@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, SlidersHorizontal, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, Plus, RotateCcw, SlidersHorizontal, Trash2 } from "lucide-react";
 import { CreateTournamentModal, type NewTournament } from "@/components/ui/create-tournament-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -16,7 +17,9 @@ export function TournamentTable({
   createDisabled = false,
   playerOptions,
   onDelete,
-  deletingTournamentId
+  deletingTournamentId,
+  onToggleLifecycle,
+  updatingTournamentId
 }: {
   items: Tournament[];
   captainNames: Record<string, string>;
@@ -27,6 +30,8 @@ export function TournamentTable({
   playerOptions: PlayerOption[];
   onDelete?: (tournament: Tournament) => void | Promise<void>;
   deletingTournamentId?: string | null;
+  onToggleLifecycle?: (tournament: Tournament) => void | Promise<void>;
+  updatingTournamentId?: string | null;
 }) {
   const [filter, setFilter] = useState<TournamentStatus | "All">("All");
   const [open, setOpen] = useState(false);
@@ -125,6 +130,31 @@ export function TournamentTable({
                       <button className="rounded-xl border border-white/10 px-3 py-2 text-sm text-[color:var(--text-muted)]">
                         Review
                       </button>
+                      <Link
+                        href={`/reports/tournaments/${item.id}`}
+                        className="rounded-xl border border-[#00D4FF]/30 px-3 py-2 text-sm text-[#8BE8FF] hover:border-[#8BE8FF]/50"
+                      >
+                        Report PDF
+                      </Link>
+                      {canManage && onToggleLifecycle ? (
+                        <button
+                          type="button"
+                          onClick={() => void onToggleLifecycle(item)}
+                          disabled={updatingTournamentId === item.id}
+                          className="inline-flex items-center gap-2 rounded-xl border border-[#00FF88]/30 px-3 py-2 text-sm text-[#00FF88] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {item.lifecycleState === "completed" ? (
+                            <RotateCcw className="h-4 w-4" />
+                          ) : (
+                            <CheckCircle2 className="h-4 w-4" />
+                          )}
+                          {updatingTournamentId === item.id
+                            ? "Updating..."
+                            : item.lifecycleState === "completed"
+                              ? "Reopen"
+                              : "Finish"}
+                        </button>
+                      ) : null}
                       {canManage && onDelete ? (
                         <button
                           type="button"

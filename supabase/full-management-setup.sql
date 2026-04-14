@@ -160,6 +160,28 @@ begin
 end;
 $$;
 
+create or replace function public.delete_tournament_force(target_tournament_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if public.current_app_role() not in ('Super Admin', 'Admin') then
+    raise exception 'Only Admin and Super Admin can delete tournaments.';
+  end if;
+
+  update public.tournaments
+  set lifecycle_state = 'active',
+      status = 'Ongoing',
+      completed_at = null
+  where id = target_tournament_id;
+
+  delete from public.tournaments
+  where id = target_tournament_id;
+end;
+$$;
+
 create or replace function public.create_tournament_with_participants(
   tournament_name text,
   tournament_start_date date,
@@ -321,6 +343,7 @@ create table if not exists public.matches (
   away_player_id uuid references public.profiles(id),
   scheduled_at timestamptz,
   venue text,
+  opponent_team text,
   status text not null default 'Upcoming',
   lineup_locked boolean not null default false,
   home_score integer not null default 0,
@@ -358,6 +381,7 @@ create table if not exists public.match_stats (
   player_id uuid not null references public.profiles(id),
   goals integer not null default 0 check (goals >= 0),
   result public.match_result not null,
+  opponent_name text,
   remarks text,
   walkover boolean not null default false,
   created_at timestamptz not null default now(),
@@ -476,6 +500,10 @@ as $$
 declare
   target_tournament uuid;
 begin
+  if public.current_app_role() in ('Super Admin', 'Admin') then
+    return coalesce(new, old);
+  end if;
+
   if tg_table_name = 'tournament_participants' then
     target_tournament := coalesce(new.tournament_id, old.tournament_id);
   elsif tg_table_name = 'matches' then
@@ -897,6 +925,7 @@ using (
 
 grant execute on function public.set_user_role(uuid, public.app_role) to authenticated;
 grant execute on function public.delete_user_account(uuid) to authenticated;
+grant execute on function public.delete_tournament_force(uuid) to authenticated;
 grant execute on function public.create_tournament_with_participants(text, date, date, text, integer, uuid, uuid, uuid[]) to authenticated;
 
 update public.profiles

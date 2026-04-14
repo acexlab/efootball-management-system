@@ -31,6 +31,7 @@ export type Tournament = {
   endDate: string;
   players: number;
   status: TournamentStatus;
+  lifecycleState?: "active" | "completed";
   format: string;
   slotCount?: number;
   captainId?: string;

@@ -29,11 +29,13 @@ export function ResultEntryForm({ role }: { role: Role }) {
   const [selectedTournamentId, setSelectedTournamentId] = useState("");
   const [matchNumber, setMatchNumber] = useState("1");
   const [venue, setVenue] = useState("Shield Arena");
+  const [opponentTeam, setOpponentTeam] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [walkover, setWalkover] = useState(false);
   const [remarks, setRemarks] = useState("");
   const [lineup, setLineup] = useState<string[]>([]);
   const [playerStats, setPlayerStats] = useState<PlayerStatDraft[]>([]);
+  const [opponents, setOpponents] = useState<string[]>([]);
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const canSubmitByRole = hasPermission(role, "enter:results");
@@ -49,6 +51,7 @@ export function ResultEntryForm({ role }: { role: Role }) {
         result: "Draw"
       }))
     );
+    setOpponents(Array.from({ length: nextSlotCount }, () => ""));
   }, []);
 
   const loadSuggestedMatchNumber = useCallback(async (tournamentId: string) => {
@@ -237,6 +240,10 @@ export function ResultEntryForm({ role }: { role: Role }) {
     );
   }
 
+  function handleOpponentChange(index: number, value: string) {
+    setOpponents((state) => state.map((item, currentIndex) => (currentIndex === index ? value : item)));
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -280,6 +287,7 @@ export function ResultEntryForm({ role }: { role: Role }) {
           away_player_id: finalLineup[1] ?? null,
           scheduled_at: scheduledAt || null,
           venue: venue.trim() || null,
+          opponent_team: opponentTeam.trim() || null,
           status: "Completed",
           lineup_locked: true,
           home_score: Number(playerStats[0]?.goals || 0),
@@ -321,6 +329,7 @@ export function ResultEntryForm({ role }: { role: Role }) {
       player_id: playerId,
       goals: Number(playerStats[index]?.goals || 0),
       result: (playerStats[index]?.result || "Draw").toLowerCase(),
+      opponent_name: opponents[index]?.trim() || null,
       remarks: remarks.trim() || null,
       walkover
     }));
@@ -345,6 +354,7 @@ export function ResultEntryForm({ role }: { role: Role }) {
     setToast("Match, final lineup, player stats, and leaderboard were saved.");
     setWalkover(false);
     setRemarks("");
+    setOpponentTeam("");
     setStep(1);
     await loadSuggestedMatchNumber(selectedTournament.id);
     setSubmitting(false);
@@ -382,6 +392,13 @@ export function ResultEntryForm({ role }: { role: Role }) {
           placeholder=""
         />
         <Field label="Venue" type="text" value={venue} onChange={setVenue} placeholder="Shield Arena" />
+        <Field
+          label="Opponent team"
+          type="text"
+          value={opponentTeam}
+          onChange={setOpponentTeam}
+          placeholder="Opponent team name"
+        />
       </div>
       {step === 1 ? (
         <div className="flex justify-end">
@@ -462,7 +479,7 @@ export function ResultEntryForm({ role }: { role: Role }) {
           {Array.from({ length: slotCount }).map((_, index) => (
             <div
               key={`stat-${index}`}
-              className="grid gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3 xl:grid-cols-[1.2fr_0.8fr_0.8fr]"
+              className="grid gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3 xl:grid-cols-[1.2fr_0.8fr_0.9fr_0.7fr]"
             >
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Player</p>
@@ -476,6 +493,13 @@ export function ResultEntryForm({ role }: { role: Role }) {
                 value={playerStats[index]?.goals ?? "0"}
                 onChange={(value) => handleStatChange(index, { goals: value })}
                 placeholder="0"
+              />
+              <Field
+                label="Opponent"
+                type="text"
+                value={opponents[index] ?? ""}
+                onChange={(value) => handleOpponentChange(index, value)}
+                placeholder="Opponent player"
               />
               <SelectField
                 label="Result"

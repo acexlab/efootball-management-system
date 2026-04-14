@@ -25,6 +25,7 @@ export function TournamentsPage() {
   const [message, setMessage] = useState("");
   const [tab, setTab] = useState<"Overview" | "Matches" | "Leaderboard" | "Players">("Overview");
   const [deletingTournamentId, setDeletingTournamentId] = useState<string | null>(null);
+  const [updatingTournamentId, setUpdatingTournamentId] = useState<string | null>(null);
 
   const loadPage = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -43,7 +44,7 @@ export function TournamentsPage() {
         supabase
           .from("tournaments")
           .select(
-            "id, name, external_competition, format, player_count, slot_count, status, captain_id, vice_captain_id, start_date, end_date"
+            "id, name, external_competition, format, player_count, slot_count, status, lifecycle_state, captain_id, vice_captain_id, start_date, end_date"
           )
           .order("start_date", { ascending: true }),
         supabase.from("profiles").select("id, full_name, gamer_tag, role")
@@ -82,6 +83,7 @@ export function TournamentsPage() {
         players: item.player_count,
         slotCount: item.slot_count ?? undefined,
         status: normalizeTournamentStatus(item.status),
+        lifecycleState: (item.lifecycle_state as "active" | "completed" | null) ?? undefined,
         format: item.format,
         captainId: item.captain_id ?? undefined,
         viceCaptainId: item.vice_captain_id ?? undefined,
@@ -223,12 +225,32 @@ export function TournamentsPage() {
     setDeletingTournamentId(tournament.id);
     setMessage("");
 
-    const { error } = await supabase.from("tournaments").delete().eq("id", tournament.id);
+    const { error: rpcError } = await supabase.rpc("delete_tournament_force", {
+      target_tournament_id: tournament.id
+    });
 
-    if (error) {
-      setMessage(`Tournament could not be deleted: ${error.message}`);
-      setDeletingTournamentId(null);
-      return;
+    if (rpcError) {
+      const fallbackReopen = await supabase
+        .from("tournaments")
+        .update({
+          lifecycle_state: "active",
+          status: "Ongoing",
+          completed_at: null
+        })
+        .eq("id", tournament.id);
+
+      if (fallbackReopen.error) {
+        setMessage(`Tournament could not be reopened for deletion: ${fallbackReopen.error.message}`);
+        setDeletingTournamentId(null);
+        return;
+      }
+
+      const { error } = await supabase.from("tournaments").delete().eq("id", tournament.id);
+      if (error) {
+        setMessage(`Tournament could not be deleted: ${error.message}`);
+        setDeletingTournamentId(null);
+        return;
+      }
     }
 
     try {
@@ -243,6 +265,50 @@ export function TournamentsPage() {
 
     setMessage("Tournament deleted successfully.");
     setDeletingTournamentId(null);
+    await loadPage();
+  }
+
+  async function handleToggleTournamentLifecycle(tournament: Tournament) {
+    if (!canManage) return;
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return;
+
+    const nextState = tournament.lifecycleState === "completed" ? "active" : "completed";
+    const nextStatus = nextState === "completed" ? "Completed" : "Ongoing";
+
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        nextState === "completed"
+          ? `Mark "${tournament.name}" as completed? This will hide it from active match entry.`
+          : `Reopen "${tournament.name}" and make it active again?`
+      );
+      if (!confirmed) return;
+    }
+
+    setUpdatingTournamentId(tournament.id);
+    setMessage("");
+
+    const { error } = await supabase
+      .from("tournaments")
+      .update({
+        lifecycle_state: nextState,
+        status: nextStatus,
+        completed_at: nextState === "completed" ? new Date().toISOString() : null
+      })
+      .eq("id", tournament.id);
+
+    if (error) {
+      setMessage(`Tournament could not be updated: ${error.message}`);
+      setUpdatingTournamentId(null);
+      return;
+    }
+
+    setMessage(
+      nextState === "completed"
+        ? "Tournament marked as completed."
+        : "Tournament reopened and active."
+    );
+    setUpdatingTournamentId(null);
     await loadPage();
   }
 
@@ -303,6 +369,8 @@ export function TournamentsPage() {
             playerOptions={playerOptions}
             onDelete={handleDeleteTournament}
             deletingTournamentId={deletingTournamentId}
+            onToggleLifecycle={handleToggleTournamentLifecycle}
+            updatingTournamentId={updatingTournamentId}
           />
         </div>
       </Panel>

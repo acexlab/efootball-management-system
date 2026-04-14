@@ -381,6 +381,7 @@ create table if not exists public.match_stats (
   match_id uuid not null references public.matches(id) on delete cascade,
   player_id uuid not null references public.profiles(id),
   goals integer not null default 0 check (goals >= 0),
+  opponent_goals integer not null default 0 check (opponent_goals >= 0),
   result public.match_result not null,
   opponent_name text,
   remarks text,
@@ -388,6 +389,9 @@ create table if not exists public.match_stats (
   created_at timestamptz not null default now(),
   unique (match_id, player_id)
 );
+
+alter table public.match_stats
+add column if not exists opponent_goals integer not null default 0 check (opponent_goals >= 0);
 
 create table if not exists public.club_leaderboard (
   id uuid primary key default gen_random_uuid(),

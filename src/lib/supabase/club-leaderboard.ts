@@ -1,4 +1,5 @@
 import type { LeaderboardRow } from "@/lib/types";
+import { rankLeaderboardRows } from "@/lib/leaderboard";
 
 type ClubLeaderboardRecord = {
   id: string;
@@ -68,8 +69,8 @@ using (true)
 with check (true);`;
 
 export function mapClubLeaderboardRows(records: ClubLeaderboardRecord[]): LeaderboardRow[] {
-  return [...records]
-    .map((record) => ({
+  return rankLeaderboardRows(
+    [...records].map((record) => ({
       id: record.id,
       name: record.player_name,
       handle: record.player_handle,
@@ -88,13 +89,5 @@ export function mapClubLeaderboardRows(records: ClubLeaderboardRecord[]): Leader
       goalDifference: record.goal_difference ?? record.goals_scored - record.goals_conceded,
       rank: 0
     }))
-    .sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points;
-      if (b.goals !== a.goals) return b.goals - a.goals;
-      return b.wins - a.wins;
-    })
-    .map((row, index) => ({
-      ...row,
-      rank: index + 1
-    }));
+  );
 }

@@ -21,9 +21,11 @@ type TeamPlayer = {
 type LineupRole = "main" | "sub";
 
 export function MatchLineupManager({
-  canManage
+  canManageAll,
+  manageableTournamentIds
 }: {
-  canManage: boolean;
+  canManageAll: boolean;
+  manageableTournamentIds: string[];
 }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,6 +40,7 @@ export function MatchLineupManager({
   const [subPlayers, setSubPlayers] = useState<string[]>([]);
 
   const selectedTeam = teams.find((team) => team.id === selectedTeamId) ?? null;
+  const canEditTournament = canManageAll || manageableTournamentIds.includes(selectedTournamentId);
 
   const loadSuggestedMatchNumber = useCallback(async (tournamentId: string) => {
     const supabase = getSupabaseBrowserClient();
@@ -148,12 +151,18 @@ export function MatchLineupManager({
     }
 
     const tournamentOptions = (tournamentRows ?? []) as TournamentOption[];
-    setTournaments(tournamentOptions);
+    const filteredOptions = canManageAll
+      ? tournamentOptions
+      : tournamentOptions.filter((item) => manageableTournamentIds.includes(item.id));
+    setTournaments(filteredOptions);
 
-    const initialTournamentId = selectedTournamentId || tournamentOptions[0]?.id || "";
+    const initialTournamentId = selectedTournamentId || filteredOptions[0]?.id || "";
     setSelectedTournamentId(initialTournamentId);
 
     if (!initialTournamentId) {
+      if (!canManageAll) {
+        setMessage("Lineup access is limited to tournaments you captain.");
+      }
       setTeams([]);
       setTeamPlayers([]);
       setLoading(false);
@@ -208,7 +217,7 @@ export function MatchLineupManager({
     }
 
     setLoading(false);
-  }, [loadLineupState, loadSuggestedMatchNumber, selectedTeamId, selectedTournamentId]);
+  }, [canManageAll, loadLineupState, loadSuggestedMatchNumber, manageableTournamentIds, selectedTeamId, selectedTournamentId]);
 
   const syncOptions = useEffectEvent(() => {
     void loadOptions();
@@ -216,7 +225,7 @@ export function MatchLineupManager({
 
   useEffect(() => {
     syncOptions();
-  }, []);
+  }, [canManageAll, manageableTournamentIds]);
 
   async function handleTournamentChange(tournamentId: string) {
     setSelectedTournamentId(tournamentId);
@@ -311,7 +320,10 @@ export function MatchLineupManager({
   );
 
   async function handleSaveLineup() {
-    if (!canManage) return;
+    if (!canEditTournament) {
+      setMessage("You can only edit lineups for tournaments you captain.");
+      return;
+    }
 
     if (!selectedTournamentId || !selectedTeamId || !selectedTeam) {
       setMessage("Select tournament and team first.");
@@ -425,6 +437,9 @@ export function MatchLineupManager({
   return (
     <Panel className="p-4 sm:p-5">
       <SectionHeading eyebrow="Tournament options" title="Match Day Player Selection" />
+      <div className="mt-2 flex flex-wrap gap-2">
+        <StatusPill label={canEditTournament ? "Lineup Access Enabled" : "Lineup Access Locked"} tone={canEditTournament ? "success" : "warning"} />
+      </div>
 
       {message ? (
         <div className="mt-4 rounded-xl border border-[#7A5CFF]/25 bg-[#7A5CFF]/10 px-3 py-2 text-sm text-[#E3DAFF]">
@@ -524,12 +539,12 @@ export function MatchLineupManager({
             />
           </div>
 
-          <div className="mt-4 flex justify-end">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={() => void handleSaveLineup()}
-              disabled={!canManage || !selectedTeam || saving}
-              className="rounded-lg border border-[#00FF88]/30 bg-[#00FF88]/10 px-4 py-2 text-sm font-semibold text-[#00FF88] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!canEditTournament || !selectedTeam || saving}
+              className="w-full rounded-lg border border-[#00FF88]/30 bg-[#00FF88]/10 px-4 py-2 text-sm font-semibold text-[#00FF88] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               {saving ? "Saving..." : "Save Lineup"}
             </button>

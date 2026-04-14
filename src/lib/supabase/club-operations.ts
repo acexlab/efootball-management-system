@@ -9,8 +9,10 @@ type ProfileAggregateRow = {
 };
 
 type MatchStatAggregateRow = {
+  match_id: string;
   player_id: string;
   goals: number;
+  opponent_goals: number | null;
   result: "win" | "draw" | "loss";
 };
 
@@ -18,7 +20,7 @@ export async function syncClubLeaderboardFromStats(supabase: SupabaseClient) {
   const [{ data: profiles, error: profilesError }, { data: stats, error: statsError }] =
     await Promise.all([
       supabase.from("profiles").select("id, full_name, gamer_tag, club_name, avatar_url"),
-      supabase.from("match_stats").select("player_id, goals, result")
+      supabase.from("match_stats").select("match_id, player_id, goals, opponent_goals, result")
     ]);
 
   if (profilesError) throw profilesError;
@@ -63,6 +65,7 @@ export async function syncClubLeaderboardFromStats(supabase: SupabaseClient) {
 
     current.matches += 1;
     current.goals_scored += stat.goals;
+    current.goals_conceded += stat.opponent_goals ?? 0;
     if (stat.result === "win") current.wins += 1;
     if (stat.result === "draw") current.draws += 1;
     if (stat.result === "loss") current.losses += 1;

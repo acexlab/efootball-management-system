@@ -1,11 +1,12 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useEffectEvent, useMemo, useState } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { loadNextTournamentMatchNumber } from "@/lib/matchday";
 import { syncClubLeaderboardFromStats } from "@/lib/supabase/club-operations";
 import { hasPermission } from "@/lib/rbac";
-import type { MatchResult, PlayerOption, Role } from "@/lib/types";
+import type { PlayerOption, Role } from "@/lib/types";
 import { useAuthProfile } from "@/hooks/use-auth-profile";
 
 type TournamentOption = {
@@ -16,10 +17,21 @@ type TournamentOption = {
 
 type PlayerStatDraft = {
   goals: string;
-  result: MatchResult;
+  opponentGoals: string;
+};
+
+type ExistingMatchRow = {
+  id: string;
+  scheduled_at: string | null;
+  venue: string | null;
+  opponent_team: string | null;
+  away_score: number | null;
+  walkover: boolean | null;
+  remarks: string | null;
 };
 
 export function ResultEntryForm({ role }: { role: Role }) {
+  const searchParams = useSearchParams();
   const { session, profile } = useAuthProfile();
   const [toast, setToast] = useState("");
   const [loading, setLoading] = useState(true);
@@ -28,6 +40,7 @@ export function ResultEntryForm({ role }: { role: Role }) {
   const [players, setPlayers] = useState<PlayerOption[]>([]);
   const [selectedTournamentId, setSelectedTournamentId] = useState("");
   const [matchNumber, setMatchNumber] = useState("1");
+  const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
   const [venue, setVenue] = useState("Shield Arena");
   const [opponentTeam, setOpponentTeam] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
@@ -39,81 +52,193 @@ export function ResultEntryForm({ role }: { role: Role }) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const canSubmitByRole = hasPermission(role, "enter:results");
+  const canManageTournaments = hasPermission(role, "manage:tournaments");
   const selectedTournament = tournaments.find((item) => item.id === selectedTournamentId) ?? null;
   const slotCount = selectedTournament?.slotCount ?? 0;
+  const requestedTournamentId = searchParams.get("tournament") ?? "";
+  const requestedMatchNumber = searchParams.get("match") ?? "";
 
-  const initializeLineupState = useCallback((nextSlotCount: number, nextPlayers: PlayerOption[]) => {
+  const buildDefaultLineupState = useCallback((nextSlotCount: number, nextPlayers: PlayerOption[]) => {
     const initialLineup = Array.from({ length: nextSlotCount }, (_, index) => nextPlayers[index]?.id ?? "");
-    setLineup(initialLineup);
-    setPlayerStats(
-      Array.from({ length: nextSlotCount }, () => ({
+    return {
+      lineup: initialLineup,
+      playerStats: Array.from({ length: nextSlotCount }, () => ({
         goals: "0",
-        result: "Draw"
-      }))
-    );
-    setOpponents(Array.from({ length: nextSlotCount }, () => ""));
+        opponentGoals: "0"
+      })),
+      opponents: Array.from({ length: nextSlotCount }, () => "")
+    };
   }, []);
+
+  const resetMatchDetails = useCallback(
+    (nextSlotCount: number, nextPlayers: PlayerOption[]) => {
+      const defaults = buildDefaultLineupState(nextSlotCount, nextPlayers);
+      setLineup(defaults.lineup);
+      setPlayerStats(defaults.playerStats);
+      setOpponents(defaults.opponents);
+      setVenue("Shield Arena");
+      setOpponentTeam("");
+      setScheduledAt("");
+      setWalkover(false);
+      setRemarks("");
+      setEditingMatchId(null);
+    },
+    [buildDefaultLineupState]
+  );
 
   const loadSuggestedMatchNumber = useCallback(async (tournamentId: string) => {
     const supabase = getSupabaseBrowserClient();
-    if (!supabase || !tournamentId) return;
+    if (!supabase || !tournamentId) return "1";
 
     try {
       const nextMatchNumber = await loadNextTournamentMatchNumber(supabase, tournamentId);
       setMatchNumber(nextMatchNumber);
+      return nextMatchNumber;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not load match days.";
       setToast(`Match day suggestion could not be loaded: ${message}`);
+      setMatchNumber("1");
+      return "1";
     }
   }, []);
 
-  const loadTournamentPlayers = useCallback(
-    async (tournamentId: string, nextSlotCount: number) => {
+  const loadTournamentPlayers = useCallback(async (tournamentId: string) => {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) return [] as PlayerOption[];
+
+    const { data: participantRows, error: participantsError } = await supabase
+      .from("tournament_participants")
+      .select("user_id")
+      .eq("tournament_id", tournamentId);
+
+    if (participantsError) {
+      setPlayers([]);
+      setToast(`Could not load tournament squad: ${participantsError.message}`);
+      return [];
+    }
+
+    const participantIds = (participantRows ?? []).map((item) => item.user_id);
+    if (!participantIds.length) {
+      setPlayers([]);
+      return [];
+    }
+
+    const { data: profileRows, error: profilesError } = await supabase
+      .from("profiles")
+      .select("id, full_name, gamer_tag, role, avatar_url")
+      .in("id", participantIds);
+
+    if (profilesError) {
+      setPlayers([]);
+      setToast(`Could not load player identities: ${profilesError.message}`);
+      return [];
+    }
+
+    const options: PlayerOption[] = (profileRows ?? []).map((item) => ({
+      id: item.id,
+      name: item.gamer_tag || item.full_name || "Shield Member",
+      role: (item.role as Role | null) ?? "Player",
+      avatarUrl: item.avatar_url ?? undefined
+    }));
+
+    setPlayers(options);
+    return options;
+  }, []);
+
+  const loadExistingMatch = useCallback(
+    async (tournamentId: string, nextMatchNumber: string, nextSlotCount: number, nextPlayers: PlayerOption[]) => {
       const supabase = getSupabaseBrowserClient();
-      if (!supabase) return;
-
-      const { data: participantRows, error: participantsError } = await supabase
-        .from("tournament_participants")
-        .select("user_id")
-        .eq("tournament_id", tournamentId);
-
-      if (participantsError) {
-        setPlayers([]);
-        initializeLineupState(nextSlotCount, []);
-        setToast(`Could not load tournament squad: ${participantsError.message}`);
+      if (!supabase || !tournamentId) {
+        resetMatchDetails(nextSlotCount, nextPlayers);
         return;
       }
 
-      const participantIds = (participantRows ?? []).map((item) => item.user_id);
-      if (!participantIds.length) {
-        setPlayers([]);
-        initializeLineupState(nextSlotCount, []);
+      const { data: matchRow, error: matchError } = await supabase
+        .from("matches")
+        .select("id, scheduled_at, venue, opponent_team, away_score, walkover, remarks")
+        .eq("tournament_id", tournamentId)
+        .eq("match_number", Number(nextMatchNumber) || 1)
+        .maybeSingle();
+
+      if (matchError) {
+        resetMatchDetails(nextSlotCount, nextPlayers);
+        setToast(`Saved result could not be loaded: ${matchError.message}`);
         return;
       }
 
-      const { data: profileRows, error: profilesError } = await supabase
-        .from("profiles")
-        .select("id, full_name, gamer_tag, role, avatar_url")
-        .in("id", participantIds);
-
-      if (profilesError) {
-        setPlayers([]);
-        initializeLineupState(nextSlotCount, []);
-        setToast(`Could not load player identities: ${profilesError.message}`);
+      if (!matchRow) {
+        resetMatchDetails(nextSlotCount, nextPlayers);
         return;
       }
 
-      const options: PlayerOption[] = (profileRows ?? []).map((item) => ({
-        id: item.id,
-        name: item.gamer_tag || item.full_name || "Shield Member",
-        role: (item.role as Role | null) ?? "Player",
-        avatarUrl: item.avatar_url ?? undefined
-      }));
+      const [{ data: slotRows, error: slotsError }, { data: statRows, error: statsError }] = await Promise.all([
+        supabase
+          .from("match_slots")
+          .select("slot_number, player_id")
+          .eq("match_id", matchRow.id)
+          .order("slot_number", { ascending: true }),
+        supabase
+          .from("match_stats")
+          .select("player_id, goals, opponent_goals, opponent_name")
+          .eq("match_id", matchRow.id)
+      ]);
 
-      setPlayers(options);
-      initializeLineupState(nextSlotCount, options);
+      if (slotsError || statsError) {
+        resetMatchDetails(nextSlotCount, nextPlayers);
+        setToast(`Saved result details could not be loaded: ${slotsError?.message ?? statsError?.message ?? "Unknown error"}`);
+        return;
+      }
+
+      const defaults = buildDefaultLineupState(nextSlotCount, nextPlayers);
+      const savedLineup = [...defaults.lineup];
+
+      for (const slot of slotRows ?? []) {
+        const slotIndex = Number(slot.slot_number) - 1;
+        if (slotIndex >= 0 && slotIndex < savedLineup.length) {
+          savedLineup[slotIndex] = slot.player_id;
+        }
+      }
+
+      const statsByPlayer = new Map(
+        (statRows ?? []).map((row) => [
+          row.player_id,
+          {
+            goals: String(Number(row.goals ?? 0)),
+            opponentGoals: String(Number((row as { opponent_goals?: number | null }).opponent_goals ?? 0)),
+            opponent: row.opponent_name ?? ""
+          }
+        ])
+      );
+
+      setLineup(savedLineup);
+      setPlayerStats(
+        savedLineup.map((playerId, index) => {
+          const saved = playerId ? statsByPlayer.get(playerId) : undefined;
+          return saved ?? defaults.playerStats[index];
+        })
+      );
+      setOpponents(
+        savedLineup.map((playerId, index) => {
+          const saved = playerId ? statsByPlayer.get(playerId) : undefined;
+          return saved?.opponent ?? defaults.opponents[index];
+        })
+      );
+      setVenue(matchRow.venue || "Shield Arena");
+      setOpponentTeam(matchRow.opponent_team || "");
+      setScheduledAt(toDateTimeLocalValue(matchRow.scheduled_at));
+      setWalkover(Boolean(matchRow.walkover));
+      setRemarks(matchRow.remarks || "");
+      setEditingMatchId(matchRow.id);
     },
-    [initializeLineupState]
+    [buildDefaultLineupState, resetMatchDetails]
+  );
+
+  const hydrateResultForm = useCallback(
+    async (tournamentId: string, nextMatchNumber: string, nextSlotCount: number) => {
+      const nextPlayers = await loadTournamentPlayers(tournamentId);
+      await loadExistingMatch(tournamentId, nextMatchNumber, nextSlotCount, nextPlayers);
+    },
+    [loadExistingMatch, loadTournamentPlayers]
   );
 
   const loadAccessibleTournaments = useCallback(async () => {
@@ -128,30 +253,58 @@ export function ResultEntryForm({ role }: { role: Role }) {
 
     setLoading(true);
 
-    let tournamentRows:
-      | Array<{ id: string; name: string; slot_count: number | null }>
-      | null
-      | undefined = [];
-    let tournamentError: { message: string } | null = null;
+    let response:
+      | { data: Array<{ id: string; name: string; slot_count: number | null }> | null; error: { message: string } | null }
+      | undefined;
 
-    const response = await supabase
-      .from("tournaments")
-      .select("id, name, slot_count")
-      .eq("lifecycle_state", "active")
-      .order("created_at", { ascending: false });
+    if (canManageTournaments) {
+      response = await supabase
+        .from("tournaments")
+        .select("id, name, slot_count")
+        .eq("lifecycle_state", "active")
+        .order("created_at", { ascending: false });
+    } else {
+      const userId = profile.id ?? session.user.id;
+      const { data: participantRows, error: participantError } = await supabase
+        .from("tournament_participants")
+        .select("tournament_id, role")
+        .eq("user_id", userId)
+        .in("role", ["captain", "vice_captain"]);
 
-    tournamentRows = response.data;
-    tournamentError = response.error;
+      if (participantError) {
+        setToast(`Tournament access could not be loaded: ${participantError.message}`);
+        setTournaments([]);
+        setPlayers([]);
+        setLoading(false);
+        return;
+      }
 
-    if (tournamentError) {
-      setToast(`Tournament access could not be loaded: ${tournamentError.message}`);
+      const tournamentIds = (participantRows ?? []).map((row) => row.tournament_id);
+
+      if (!tournamentIds.length) {
+        setTournaments([]);
+        setPlayers([]);
+        setLoading(false);
+        return;
+      }
+
+      response = await supabase
+        .from("tournaments")
+        .select("id, name, slot_count")
+        .eq("lifecycle_state", "active")
+        .in("id", tournamentIds)
+        .order("created_at", { ascending: false });
+    }
+
+    if (response.error) {
+      setToast(`Tournament access could not be loaded: ${response.error.message}`);
       setTournaments([]);
       setPlayers([]);
       setLoading(false);
       return;
     }
 
-    const options = (tournamentRows ?? []).map((item) => ({
+    const options = (response.data ?? []).map((item) => ({
       id: item.id,
       name: item.name,
       slotCount: item.slot_count ?? 5
@@ -161,17 +314,33 @@ export function ResultEntryForm({ role }: { role: Role }) {
     setLoading(false);
 
     if (options.length) {
-      const nextTournamentId = options[0].id;
+      const nextTournamentId =
+        options.find((item) => item.id === requestedTournamentId)?.id ?? options[0].id;
       setSelectedTournamentId(nextTournamentId);
-      await loadSuggestedMatchNumber(nextTournamentId);
-      await loadTournamentPlayers(nextTournamentId, options[0].slotCount);
+      const nextMatchNumber =
+        requestedTournamentId === nextTournamentId && requestedMatchNumber
+          ? requestedMatchNumber
+          : await loadSuggestedMatchNumber(nextTournamentId);
+      if (requestedTournamentId === nextTournamentId && requestedMatchNumber) {
+        setMatchNumber(requestedMatchNumber);
+      }
+      await hydrateResultForm(nextTournamentId, nextMatchNumber, options[0].slotCount);
     } else {
       setSelectedTournamentId("");
       setMatchNumber("1");
       setPlayers([]);
-      initializeLineupState(0, []);
+      resetMatchDetails(0, []);
     }
-  }, [initializeLineupState, loadSuggestedMatchNumber, loadTournamentPlayers, role, session]);
+  }, [
+    canManageTournaments,
+    hydrateResultForm,
+    loadSuggestedMatchNumber,
+    profile.id,
+    requestedMatchNumber,
+    requestedTournamentId,
+    resetMatchDetails,
+    session
+  ]);
 
   const syncResultForm = useEffectEvent(() => {
     void loadAccessibleTournaments();
@@ -179,27 +348,50 @@ export function ResultEntryForm({ role }: { role: Role }) {
 
   useEffect(() => {
     syncResultForm();
-  }, [session, role]);
+  }, [canManageTournaments, profile.id, role, session]);
 
-  const canSubmit = canSubmitByRole || tournaments.length > 0;
+  const canSubmit = canSubmitByRole && (canManageTournaments || tournaments.length > 0);
 
   const playerMap = useMemo(
     () => Object.fromEntries(players.map((player) => [player.id, player.name])),
     [players]
+  );
+  const clubScore = useMemo(
+    () =>
+      playerStats.reduce((sum, stat) => {
+        const goals = Number(stat.goals || 0);
+        return sum + (Number.isNaN(goals) ? 0 : goals);
+      }, 0),
+    [playerStats]
+  );
+  const opponentScore = useMemo(
+    () =>
+      playerStats.reduce((sum, stat) => {
+        const goals = Number(stat.opponentGoals || 0);
+        return sum + (Number.isNaN(goals) ? 0 : goals);
+      }, 0),
+    [playerStats]
   );
 
   async function handleTournamentChange(tournamentId: string) {
     setSelectedTournamentId(tournamentId);
     const nextTournament = tournaments.find((item) => item.id === tournamentId);
     if (!nextTournament) {
-      initializeLineupState(0, []);
+      resetMatchDetails(0, []);
       setMatchNumber("1");
       setPlayers([]);
       return;
     }
 
-    await loadSuggestedMatchNumber(tournamentId);
-    await loadTournamentPlayers(tournamentId, nextTournament.slotCount);
+    const nextMatchNumber = await loadSuggestedMatchNumber(tournamentId);
+    await hydrateResultForm(tournamentId, nextMatchNumber, nextTournament.slotCount);
+  }
+
+  async function handleMatchNumberChange(value: string) {
+    setMatchNumber(value);
+    if (!selectedTournamentId || !selectedTournament) return;
+
+    await loadExistingMatch(selectedTournamentId, value, selectedTournament.slotCount, players);
   }
 
   function handleLineupChange(index: number, playerId: string) {
@@ -262,8 +454,8 @@ export function ResultEntryForm({ role }: { role: Role }) {
           opponent_team: opponentTeam.trim() || null,
           status: "Completed",
           lineup_locked: true,
-          home_score: Number(playerStats[0]?.goals || 0),
-          away_score: Number(playerStats[1]?.goals || 0),
+          home_score: clubScore,
+          away_score: opponentScore,
           walkover,
           reported_by: profile.id ?? session.user.id,
           remarks: remarks.trim() || null
@@ -300,7 +492,8 @@ export function ResultEntryForm({ role }: { role: Role }) {
       match_id: matchRow.id,
       player_id: playerId,
       goals: Number(playerStats[index]?.goals || 0),
-      result: (playerStats[index]?.result || "Draw").toLowerCase(),
+      opponent_goals: Number(playerStats[index]?.opponentGoals || 0),
+      result: deriveResult(playerStats[index]),
       opponent_name: opponents[index]?.trim() || null,
       remarks: remarks.trim() || null,
       walkover
@@ -323,12 +516,10 @@ export function ResultEntryForm({ role }: { role: Role }) {
       return;
     }
 
-    setToast("Match, final lineup, player stats, and leaderboard were saved.");
-    setWalkover(false);
-    setRemarks("");
-    setOpponentTeam("");
+    setEditingMatchId(matchRow.id);
     setStep(1);
-    await loadSuggestedMatchNumber(selectedTournament.id);
+    setToast(editingMatchId ? "Match result updated." : "Match result saved.");
+    await loadExistingMatch(selectedTournament.id, String(Number(matchNumber) || 1), slotCount, players);
     setSubmitting(false);
   }
 
@@ -337,6 +528,12 @@ export function ResultEntryForm({ role }: { role: Role }) {
       {loading ? (
         <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-[color:var(--text-muted)]">
           Loading tournament access...
+        </div>
+      ) : null}
+
+      {editingMatchId ? (
+        <div className="rounded-2xl border border-[#00D4FF]/20 bg-[#00D4FF]/10 px-4 py-3 text-sm text-[#C5F5FF]">
+          Editing saved result for match day {matchNumber}. Change any score, lineup, or player stat, then save again.
         </div>
       ) : null}
 
@@ -352,9 +549,9 @@ export function ResultEntryForm({ role }: { role: Role }) {
           label="Match day"
           type="number"
           value={matchNumber}
-          onChange={setMatchNumber}
+          onChange={(value) => void handleMatchNumberChange(value)}
           placeholder="Auto"
-          hint="Next open match day is suggested automatically."
+          hint="Choose an existing match day to edit it, or use the next open one."
         />
         <Field
           label="Scheduled at"
@@ -378,7 +575,7 @@ export function ResultEntryForm({ role }: { role: Role }) {
             type="button"
             onClick={() => setStep(2)}
             disabled={!selectedTournamentId}
-            className="rounded-lg border border-[#00FF88]/30 bg-[#00FF88]/10 px-4 py-2 text-sm font-semibold text-[#00FF88] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg border border-[#00FF88]/30 bg-[#00FF88]/10 px-4 py-2 text-sm font-semibold text-[#00FF88] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             Next: Lineup
           </button>
@@ -424,18 +621,18 @@ export function ResultEntryForm({ role }: { role: Role }) {
         </div>
       </div>
       {step === 2 ? (
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => setStep(1)}
-            className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white"
+            className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white sm:w-auto"
           >
             Back
           </button>
           <button
             type="button"
             onClick={() => setStep(3)}
-            className="rounded-lg border border-[#00FF88]/30 bg-[#00FF88]/10 px-4 py-2 text-sm font-semibold text-[#00FF88]"
+            className="w-full rounded-lg border border-[#00FF88]/30 bg-[#00FF88]/10 px-4 py-2 text-sm font-semibold text-[#00FF88] sm:w-auto"
           >
             Next: Stats
           </button>
@@ -444,11 +641,33 @@ export function ResultEntryForm({ role }: { role: Role }) {
 
       <div className={`rounded-2xl border border-white/8 bg-black/20 p-4 ${step === 3 ? "" : "opacity-60"}`}>
         <p className="text-xs uppercase tracking-[0.22em] text-[color:var(--text-muted)]">Player stats</p>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Field
+            label="Shield score"
+            type="number"
+            value={String(clubScore)}
+            onChange={() => {}}
+            placeholder="0"
+            hint="Calculated automatically from the player goals below."
+            readOnly
+          />
+          <Field
+            label="Opponent score"
+            type="number"
+            value={String(opponentScore)}
+            onChange={() => {}}
+            placeholder="0"
+            hint="Calculated automatically from the opponent goals below."
+            readOnly
+          />
+        </div>
+
         <div className="mt-3 grid gap-3">
           {Array.from({ length: slotCount }).map((_, index) => (
             <div
               key={`stat-${index}`}
-              className="grid gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3 xl:grid-cols-[1.2fr_0.8fr_0.9fr_0.7fr]"
+              className="grid gap-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3 lg:grid-cols-2 2xl:grid-cols-[1.2fr_0.7fr_0.9fr_0.7fr_0.7fr]"
             >
               <div>
                 <p className="text-xs uppercase tracking-[0.18em] text-[color:var(--text-muted)]">Player</p>
@@ -470,16 +689,21 @@ export function ResultEntryForm({ role }: { role: Role }) {
                 onChange={(value) => handleOpponentChange(index, value)}
                 placeholder="Opponent player"
               />
-              <SelectField
+              <Field
+                label="Opponent Goals"
+                type="number"
+                value={playerStats[index]?.opponentGoals ?? "0"}
+                onChange={(value) => handleStatChange(index, { opponentGoals: value })}
+                placeholder="0"
+              />
+              <Field
                 label="Result"
-                value={playerStats[index]?.result ?? "Draw"}
-                onChange={(value) => handleStatChange(index, { result: value as MatchResult })}
-                options={[
-                  { label: "Win", value: "Win" },
-                  { label: "Draw", value: "Draw" },
-                  { label: "Loss", value: "Loss" }
-                ]}
-                placeholder="Result"
+                type="text"
+                value={deriveDisplayResult(playerStats[index])}
+                onChange={() => {}}
+                placeholder="Draw"
+                hint="Calculated from player goals vs opponent goals."
+                readOnly
               />
             </div>
           ))}
@@ -511,12 +735,12 @@ export function ResultEntryForm({ role }: { role: Role }) {
         <p className="text-sm text-[color:var(--text-muted)]">
           Role gate: <span className="text-white">{role}</span>
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           {step === 3 ? (
             <button
               type="button"
               onClick={() => setStep(2)}
-              className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white"
+              className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-white sm:w-auto"
             >
               Back
             </button>
@@ -524,9 +748,9 @@ export function ResultEntryForm({ role }: { role: Role }) {
           <button
             type="submit"
             disabled={submitting || !selectedTournamentId || step !== 3}
-            className="rounded-lg border border-[#00FF88]/30 bg-[#00FF88]/12 px-4 py-2 font-semibold text-[#00FF88] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-lg border border-[#00FF88]/30 bg-[#00FF88]/12 px-4 py-2 font-semibold text-[#00FF88] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
-            {submitting ? "Saving..." : "Save Match Result"}
+            {submitting ? "Saving..." : editingMatchId ? "Update Match Result" : "Save Match Result"}
           </button>
         </div>
       </div>
@@ -540,13 +764,45 @@ export function ResultEntryForm({ role }: { role: Role }) {
   );
 }
 
+function toDateTimeLocalValue(value: string | null) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function deriveResult(stat?: PlayerStatDraft) {
+  const playerGoals = Number(stat?.goals || 0);
+  const opponentGoals = Number(stat?.opponentGoals || 0);
+
+  if (playerGoals > opponentGoals) return "win";
+  if (playerGoals < opponentGoals) return "loss";
+  return "draw";
+}
+
+function deriveDisplayResult(stat?: PlayerStatDraft) {
+  const result = deriveResult(stat);
+  if (result === "win") return "Win";
+  if (result === "loss") return "Loss";
+  return "Draw";
+}
+
 function Field({
   label,
   type,
   value,
   onChange,
   placeholder,
-  hint
+  hint,
+  readOnly = false
 }: {
   label: string;
   type: string;
@@ -554,6 +810,7 @@ function Field({
   onChange: (value: string) => void;
   placeholder: string;
   hint?: string;
+  readOnly?: boolean;
 }) {
   return (
     <label className="space-y-2">
@@ -563,7 +820,8 @@ function Field({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-[#00D4FF]/30"
+        readOnly={readOnly}
+        className={`w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-[#00D4FF]/30 ${readOnly ? "cursor-default opacity-80" : ""}`}
       />
       {hint ? <span className="block text-xs text-[color:var(--text-muted)]">{hint}</span> : null}
     </label>

@@ -363,7 +363,7 @@ export function DashboardPage() {
           <SectionHeading
             eyebrow="Top Players"
             title="Leaderboard Preview"
-            description="Current top performers ranked by points, goals, and wins."
+            description="Current top performers ranked by balanced performance, with losses penalized."
           />
           <div className="mt-4">
             {rowsLoading && signedIn ? (

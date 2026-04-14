@@ -7,19 +7,18 @@ import { LeaderboardTable } from "@/components/ui/leaderboard-table";
 import { Panel } from "@/components/ui/panel";
 import { SectionHeading } from "@/components/ui/section-heading";
 import { useAuthProfile } from "@/hooks/use-auth-profile";
+import { type LeaderboardSortKey, rankLeaderboardRows } from "@/lib/leaderboard";
 import { mapClubLeaderboardRows } from "@/lib/supabase/club-leaderboard";
 import { syncClubLeaderboardFromStats } from "@/lib/supabase/club-operations";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import type { LeaderboardRow } from "@/lib/types";
-
-type SortKey = "points" | "goals" | "wins";
 
 export function LeaderboardPage() {
   const { session, profile } = useAuthProfile();
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<SortKey>("points");
+  const [sortBy, setSortBy] = useState<LeaderboardSortKey>("performance");
   const [tournamentFilter, setTournamentFilter] = useState("All tournaments");
 
   const loadLeaderboard = useCallback(async () => {
@@ -67,16 +66,7 @@ export function LeaderboardPage() {
   }, [session, profile.club]);
 
   const sortedRows = useMemo(() => {
-    const sorted = [...leaderboard];
-    if (sortBy === "points") {
-      sorted.sort((a, b) => b.points - a.points || b.goals - a.goals || b.wins - a.wins);
-    } else if (sortBy === "goals") {
-      sorted.sort((a, b) => b.goals - a.goals || b.points - a.points || b.wins - a.wins);
-    } else {
-      sorted.sort((a, b) => b.wins - a.wins || b.points - a.points || b.goals - a.goals);
-    }
-
-    return sorted.map((item, index) => ({ ...item, rank: index + 1 }));
+    return rankLeaderboardRows(leaderboard, sortBy);
   }, [leaderboard, sortBy]);
 
   return (
@@ -85,7 +75,7 @@ export function LeaderboardPage() {
         <SectionHeading
           eyebrow="Leaderboard"
           title="Rankings"
-          description="Rank, player, goals, wins, and points with sortable controls."
+          description="Default ranking uses a performance score that rewards wins, draws, goals, and goal difference while penalizing losses."
         />
         <div className="mt-4 flex flex-wrap gap-2">
           <select
@@ -97,14 +87,20 @@ export function LeaderboardPage() {
           </select>
           <select
             value={sortBy}
-            onChange={(event) => setSortBy(event.target.value as SortKey)}
+            onChange={(event) => setSortBy(event.target.value as LeaderboardSortKey)}
             className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white"
           >
+            <option value="performance">Sort: Performance</option>
             <option value="points">Sort: Points</option>
             <option value="goals">Sort: Goals</option>
             <option value="wins">Sort: Wins</option>
           </select>
         </div>
+        {sortBy === "performance" ? (
+          <p className="mt-3 text-xs text-[color:var(--text-muted)]">
+            Performance balances wins, draws, goals, and goal difference, and pushes loss-only records below players who have not played yet.
+          </p>
+        ) : null}
         {message ? (
           <div className="mt-3 rounded-lg border border-[#7A5CFF]/25 bg-[#7A5CFF]/10 px-3 py-2 text-xs text-[#E3DAFF]">
             {message}

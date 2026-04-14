@@ -26,6 +26,7 @@ export function TournamentsPage() {
   const [tab, setTab] = useState<"Overview" | "Matches" | "Leaderboard" | "Players">("Overview");
   const [deletingTournamentId, setDeletingTournamentId] = useState<string | null>(null);
   const [updatingTournamentId, setUpdatingTournamentId] = useState<string | null>(null);
+  const [manageableTournamentIds, setManageableTournamentIds] = useState<string[]>([]);
 
   const loadPage = useCallback(async () => {
     const supabase = getSupabaseBrowserClient();
@@ -33,31 +34,43 @@ export function TournamentsPage() {
     if (!supabaseReady || !supabase || !session) {
       setTournaments([]);
       setProfiles({});
+      setManageableTournamentIds([]);
       setLoading(false);
       return;
     }
 
     setLoading(true);
 
-    const [{ data: tournamentRows, error: tournamentsError }, { data: profileRows, error: profilesError }] =
-      await Promise.all([
-        supabase
-          .from("tournaments")
-          .select(
-            "id, name, external_competition, format, player_count, slot_count, status, lifecycle_state, home_team_name, captain_id, vice_captain_id, start_date, end_date"
-          )
-          .order("start_date", { ascending: true }),
-        supabase.from("profiles").select("id, full_name, gamer_tag, role")
-      ]);
+    const [
+      { data: tournamentRows, error: tournamentsError },
+      { data: profileRows, error: profilesError },
+      { data: participantRows, error: participantsError }
+    ] = await Promise.all([
+      supabase
+        .from("tournaments")
+        .select(
+          "id, name, external_competition, format, player_count, slot_count, status, lifecycle_state, home_team_name, captain_id, vice_captain_id, start_date, end_date"
+        )
+        .order("start_date", { ascending: true }),
+      supabase.from("profiles").select("id, full_name, gamer_tag, role"),
+      canManage
+        ? Promise.resolve({ data: [] as Array<{ tournament_id: string }>, error: null })
+        : supabase
+            .from("tournament_participants")
+            .select("tournament_id, role")
+            .eq("user_id", profile.id ?? session.user.id)
+            .in("role", ["captain", "vice_captain"])
+    ]);
 
-    if (tournamentsError || profilesError) {
+    if (tournamentsError || profilesError || participantsError) {
       setMessage(
         `Tournament tables are not ready yet. Run full-management-setup.sql. ${
-          tournamentsError?.message ?? profilesError?.message ?? ""
+          tournamentsError?.message ?? profilesError?.message ?? participantsError?.message ?? ""
         }`.trim()
       );
       setTournaments([]);
       setProfiles({});
+      setManageableTournamentIds([]);
       setLoading(false);
       return;
     }
@@ -91,9 +104,14 @@ export function TournamentsPage() {
         externalCompetition: item.external_competition
       }))
     );
+    if (canManage) {
+      setManageableTournamentIds((tournamentRows ?? []).map((item) => item.id));
+    } else {
+      setManageableTournamentIds((participantRows ?? []).map((row) => row.tournament_id));
+    }
     setMessage("");
     setLoading(false);
-  }, [session, supabaseReady]);
+  }, [canManage, profile.id, session, supabaseReady]);
 
   const syncTournamentPage = useEffectEvent(() => {
     void loadPage();
@@ -101,7 +119,7 @@ export function TournamentsPage() {
 
   useEffect(() => {
     syncTournamentPage();
-  }, [session, supabaseReady]);
+  }, [canManage, profile.id, session, supabaseReady]);
 
   async function handleCreateTournament(form: NewTournament) {
     const supabase = getSupabaseBrowserClient();
@@ -456,7 +474,7 @@ export function TournamentsPage() {
         />
       </div>
 
-      <MatchLineupManager canManage={canManage} />
+      <MatchLineupManager canManageAll={canManage} manageableTournamentIds={manageableTournamentIds} />
     </div>
   );
 }

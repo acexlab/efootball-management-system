@@ -1,5 +1,6 @@
 "use client";
 
+import { Suspense } from "react";
 import { Panel } from "@/components/ui/panel";
 import { ResultEntryForm } from "@/components/ui/result-entry-form";
 import { SectionHeading } from "@/components/ui/section-heading";
@@ -18,7 +19,7 @@ export function ResultsPage() {
         <SectionHeading
           eyebrow="Match workflow"
           title="Result Entry"
-          description="Step-based flow: select tournament and match, set lineup slots, then submit player stats."
+          description="Select a match day to create or edit a result, set lineup slots, enter player stats, and record the opponent score for GD."
         />
         <div className="mt-4 flex flex-wrap gap-2">
           <StatusPill label={profile.role} tone={canEnterResults ? "success" : "neutral"} />
@@ -33,7 +34,15 @@ export function ResultsPage() {
           <StepCard step="Step 3" title="Enter player stats" />
         </div>
         <div className="mt-4">
-          <ResultEntryForm role={profile.role} />
+          <Suspense
+            fallback={
+              <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-[color:var(--text-muted)]">
+                Loading result form...
+              </div>
+            }
+          >
+            <ResultEntryForm role={profile.role} />
+          </Suspense>
         </div>
       </Panel>
     </div>

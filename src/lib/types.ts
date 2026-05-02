@@ -6,6 +6,8 @@ export type MatchStatus = "Live" | "Upcoming" | "Completed";
 export type MatchResult = "Win" | "Loss" | "Draw";
 export type TournamentParticipantRole = "player" | "captain" | "vice_captain";
 export type LineupRole = "main" | "sub";
+export type TournamentScope = "inter_clan" | "intra_clan";
+export type TournamentFormatMode = "league" | "knockout" | "group_knockout";
 
 export type Player = {
   id: string;
@@ -41,6 +43,9 @@ export type Tournament = {
   createdBy?: string;
   externalCompetition?: string;
   canDelete?: boolean;
+  scope?: TournamentScope;
+  formatMode?: TournamentFormatMode;
+  groupCount?: number;
 };
 
 export type TournamentTeam = {

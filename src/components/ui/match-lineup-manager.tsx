@@ -635,7 +635,8 @@ export function MatchLineupManager({
                 {rosterPlayers.length}/{rosterOptions.length} selected
               </span>
             </div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="mt-3 max-h-[320px] overflow-y-auto pr-1">
+              <div className="grid gap-2 sm:grid-cols-2">
               {rosterOptions.map((player) => (
                 <ToggleRow
                   key={`roster-${player.id}`}
@@ -645,6 +646,7 @@ export function MatchLineupManager({
                   onClick={() => toggleRosterPlayer(player.id)}
                 />
               ))}
+              </div>
             </div>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end">
               <button
@@ -666,16 +668,18 @@ export function MatchLineupManager({
                   {mainPlayers.length}/{selectedTeam?.playersPerTeam ?? 0}
                 </span>
               </div>
-              <div className="mt-3 grid gap-2">
-                {teamPlayers.map((player) => (
-                  <ToggleRow
-                    key={`main-${player.id}`}
-                    name={player.name}
-                    checked={mainPlayers.includes(player.id)}
-                    disabled={subPlayers.includes(player.id)}
-                    onClick={() => toggleSelection(player.id, "main")}
-                  />
-                ))}
+              <div className="mt-3 max-h-[320px] overflow-y-auto pr-1">
+                <div className="grid gap-2">
+                  {teamPlayers.map((player) => (
+                    <ToggleRow
+                      key={`main-${player.id}`}
+                      name={player.name}
+                      checked={mainPlayers.includes(player.id)}
+                      disabled={subPlayers.includes(player.id)}
+                      onClick={() => toggleSelection(player.id, "main")}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -686,16 +690,18 @@ export function MatchLineupManager({
                   {subPlayers.length}/{selectedTeam?.subsPerTeam ?? 0}
                 </span>
               </div>
-              <div className="mt-3 grid gap-2">
-                {teamPlayers.map((player) => (
-                  <ToggleRow
-                    key={`sub-${player.id}`}
-                    name={player.name}
-                    checked={subPlayers.includes(player.id)}
-                    disabled={mainPlayers.includes(player.id)}
-                    onClick={() => toggleSelection(player.id, "sub")}
-                  />
-                ))}
+              <div className="mt-3 max-h-[320px] overflow-y-auto pr-1">
+                <div className="grid gap-2">
+                  {teamPlayers.map((player) => (
+                    <ToggleRow
+                      key={`sub-${player.id}`}
+                      name={player.name}
+                      checked={subPlayers.includes(player.id)}
+                      disabled={mainPlayers.includes(player.id)}
+                      onClick={() => toggleSelection(player.id, "sub")}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -805,7 +811,7 @@ function ToggleRow({
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className={`flex items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left text-sm ${
+      className={`flex min-h-[52px] items-center justify-between gap-3 rounded-xl border px-3 py-3 text-left text-sm ${
         checked
           ? "border-[#00FF88]/30 bg-[#00FF88]/10 text-white"
           : "border-white/8 bg-white/[0.03] text-white"

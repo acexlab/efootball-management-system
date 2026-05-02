@@ -77,7 +77,14 @@ export function TeamManagementPanel({
   }, []);
 
   const loadTournamentTeams = useCallback(
-    async (tournamentId: string, availablePlayers: PlayerPerformance[]) => {
+    async (
+      tournamentId: string,
+      availablePlayers: PlayerPerformance[],
+      tournamentStatsByPlayer: Map<
+        string,
+        { matches: number; points: number; goals: number; wins: number; draws: number; losses: number }
+      >
+    ) => {
       const supabase = getSupabaseBrowserClient();
       if (!supabase || !tournamentId) {
         setTeams([]);
@@ -146,7 +153,20 @@ export function TeamManagementPanel({
         (rosterRows ?? []).map((team) => [
           team.id,
           ((team.team_players as Array<{ player_id: string }> | null) ?? [])
-            .map((row) => playerMap.get(row.player_id))
+            .map((row) => {
+              const lifetimePlayer = playerMap.get(row.player_id);
+              if (!lifetimePlayer) return null;
+              const tournamentStats = tournamentStatsByPlayer.get(row.player_id);
+              return {
+                ...lifetimePlayer,
+                matches: tournamentStats?.matches ?? 0,
+                points: tournamentStats?.points ?? 0,
+                goals: tournamentStats?.goals ?? 0,
+                wins: tournamentStats?.wins ?? 0,
+                draws: tournamentStats?.draws ?? 0,
+                losses: tournamentStats?.losses ?? 0
+              };
+            })
             .filter((item): item is PlayerPerformance => Boolean(item))
         ])
       );
@@ -174,7 +194,12 @@ export function TeamManagementPanel({
         return;
       }
 
-      const [{ data: participantRows, error: participantError }, { data: leaderboardRows, error: leaderboardError }] =
+      const [
+        { data: participantRows, error: participantError },
+        { data: leaderboardRows, error: leaderboardError },
+        { data: matchRows, error: matchError },
+        { data: statRows, error: statError }
+      ] =
         await Promise.all([
           supabase
             .from("profiles")
@@ -182,14 +207,16 @@ export function TeamManagementPanel({
             .order("created_at", { ascending: true }),
           supabase
             .from("club_leaderboard")
-            .select("player_id, matches, points, goals_scored, wins, draws, losses")
+            .select("player_id, matches, points, goals_scored, wins, draws, losses"),
+          supabase.from("matches").select("id").eq("tournament_id", tournamentId),
+          supabase.from("match_stats").select("match_id, player_id, goals, result")
         ]);
 
-      if (participantError || leaderboardError) {
+      if (participantError || leaderboardError || matchError || statError) {
         setPlayers([]);
         setTeams([]);
         setMessage(
-          `Tournament squad could not be loaded: ${participantError?.message ?? leaderboardError?.message ?? "Unknown error"}`
+          `Tournament squad could not be loaded: ${participantError?.message ?? leaderboardError?.message ?? matchError?.message ?? statError?.message ?? "Unknown error"}`
         );
         return;
       }
@@ -215,6 +242,42 @@ export function TeamManagementPanel({
           }
         ])
       );
+
+      const tournamentMatchIds = new Set(((matchRows ?? []) as Array<{ id: string }>).map((row) => row.id));
+      const tournamentStatsByPlayer = ((statRows ?? []) as Array<{
+        match_id: string;
+        player_id: string;
+        goals: number | null;
+        result: string | null;
+      }>).reduce<
+        Map<string, { matches: number; points: number; goals: number; wins: number; draws: number; losses: number }>
+      >((acc, row) => {
+        if (!tournamentMatchIds.has(row.match_id)) return acc;
+        const current = acc.get(row.player_id) ?? {
+          matches: 0,
+          points: 0,
+          goals: 0,
+          wins: 0,
+          draws: 0,
+          losses: 0
+        };
+
+        current.matches += 1;
+        current.goals += Number(row.goals ?? 0);
+
+        if (row.result === "win") {
+          current.wins += 1;
+          current.points += 3;
+        } else if (row.result === "draw") {
+          current.draws += 1;
+          current.points += 1;
+        } else if (row.result === "loss") {
+          current.losses += 1;
+        }
+
+        acc.set(row.player_id, current);
+        return acc;
+      }, new Map());
 
       const allProfiles = (participantRows ?? []) as Array<{
         id: string;
@@ -245,7 +308,7 @@ export function TeamManagementPanel({
       });
 
       setPlayers(nextPlayers);
-      await loadTournamentTeams(tournamentId, nextPlayers);
+      await loadTournamentTeams(tournamentId, nextPlayers, tournamentStatsByPlayer);
     },
     [loadTournamentTeams, profile.club]
   );

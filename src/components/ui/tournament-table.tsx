@@ -19,7 +19,10 @@ export function TournamentTable({
   onDelete,
   deletingTournamentId,
   onToggleLifecycle,
-  updatingTournamentId
+  updatingTournamentId,
+  createLabel = "Create Tournament",
+  defaultScope = "inter_clan",
+  onView
 }: {
   items: Tournament[];
   captainNames: Record<string, string>;
@@ -32,6 +35,9 @@ export function TournamentTable({
   deletingTournamentId?: string | null;
   onToggleLifecycle?: (tournament: Tournament) => void | Promise<void>;
   updatingTournamentId?: string | null;
+  createLabel?: string;
+  defaultScope?: "inter_clan" | "intra_clan";
+  onView?: (tournament: Tournament) => void;
 }) {
   const [filter, setFilter] = useState<TournamentStatus | "All">("All");
   const [open, setOpen] = useState(false);
@@ -71,7 +77,7 @@ export function TournamentTable({
             className="inline-flex items-center gap-2 rounded-2xl border border-[#00FF88]/30 bg-[#00FF88]/12 px-4 py-3 text-sm font-semibold text-[#00FF88] disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
-            Create Tournament
+            {createLabel}
           </button>
         </div>
       </div>
@@ -124,7 +130,11 @@ export function TournamentTable({
                   </td>
                   <td className="rounded-r-2xl px-4 py-4">
                     <div className="flex gap-2">
-                      <button className="rounded-xl border border-white/10 px-3 py-2 text-sm text-white">
+                      <button
+                        type="button"
+                        onClick={() => onView?.(item)}
+                        className="rounded-xl border border-white/10 px-3 py-2 text-sm text-white"
+                      >
                         View
                       </button>
                       <button className="rounded-xl border border-white/10 px-3 py-2 text-sm text-[color:var(--text-muted)]">
@@ -188,6 +198,7 @@ export function TournamentTable({
         onClose={() => setOpen(false)}
         onCreate={(tournament) => void onCreate?.(tournament)}
         playerOptions={playerOptions}
+        defaultScope={defaultScope}
       />
     </>
   );

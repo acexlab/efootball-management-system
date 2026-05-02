@@ -25,8 +25,8 @@ type ResultDetail = {
   scheduledAt: string;
   remarks: string;
   walkover: boolean;
-  clubScore: number;
-  opponentScore: number;
+  clubPoints: number;
+  opponentPoints: number;
   slots: ResultSlot[];
 };
 
@@ -119,6 +119,17 @@ export function ResultViewer() {
       };
     });
 
+    const clubPoints = slots.reduce((sum, slot) => {
+      if (slot.result === "Win") return sum + 3;
+      if (slot.result === "Draw") return sum + 1;
+      return sum;
+    }, 0);
+    const opponentPoints = slots.reduce((sum, slot) => {
+      if (slot.result === "Loss") return sum + 3;
+      if (slot.result === "Draw") return sum + 1;
+      return sum;
+    }, 0);
+
     setResult({
       tournamentName: tournamentRow?.name ?? "Tournament",
       matchNumber: Number(matchRow.match_number ?? matchNumber ?? 1),
@@ -128,8 +139,8 @@ export function ResultViewer() {
       scheduledAt: matchRow.scheduled_at ? new Date(matchRow.scheduled_at).toLocaleString() : "Not scheduled",
       remarks: matchRow.remarks ?? "",
       walkover: Boolean(matchRow.walkover),
-      clubScore: Number(matchRow.home_score ?? 0),
-      opponentScore: Number(matchRow.away_score ?? 0),
+      clubPoints,
+      opponentPoints,
       slots
     });
     setLoading(false);
@@ -183,9 +194,9 @@ export function ResultViewer() {
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-3 text-center">
             <p className="text-2xl font-black tracking-[0.14em] text-white" style={{ fontFamily: "\"Orbitron\", sans-serif" }}>
-              {result.clubScore} : {result.opponentScore}
+              {result.clubPoints} : {result.opponentPoints}
             </p>
-            <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-[color:var(--text-muted)]">Score</p>
+            <p className="mt-1 text-[10px] uppercase tracking-[0.3em] text-[color:var(--text-muted)]">Points</p>
           </div>
           <div className="md:text-right">
             <p className="text-xs text-[color:var(--text-muted)]">Away</p>
